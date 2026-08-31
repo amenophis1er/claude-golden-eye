@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  ArrowDownToLine, Bot, CheckCircle2, Flag, GitFork, MessageSquare,
+  ArrowDownToLine, ArrowDownUp, Bot, CheckCircle2, Flag, GitFork, MessageSquare,
   Play, Power, ShieldX, TerminalSquare, TrendingUp, User,
 } from 'lucide-react';
 import type { HookEvent, SessionInfo } from '../lib/types';
@@ -104,23 +104,41 @@ export default function LiveFeed({ session, events, now }: { session: SessionInf
   const entries = events.map(toEntry).filter(Boolean) as Entry[];
   const scroller = useRef<HTMLDivElement>(null);
   const [follow, setFollow] = useState(true);
+  // newest-first is the monitoring default; chronological reads like a story.
+  const [newestFirst, setNewestFirst] = useState(() => localStorage.getItem('ge-feed-order') !== 'oldest');
+  const shown = newestFirst ? [...entries].reverse() : entries;
 
   useEffect(() => {
-    if (follow && scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight;
-  }, [entries.length, follow]);
+    if (!newestFirst && follow && scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight;
+  }, [entries.length, follow, newestFirst]);
 
   const onScroll = () => {
     const el = scroller.current;
-    if (!el) return;
+    if (!el || newestFirst) return;
     setFollow(el.scrollTop + el.clientHeight >= el.scrollHeight - 48);
+  };
+
+  const toggleOrder = () => {
+    const next = !newestFirst;
+    setNewestFirst(next);
+    localStorage.setItem('ge-feed-order', next ? 'newest' : 'oldest');
+    if (scroller.current) scroller.current.scrollTop = next ? 0 : scroller.current.scrollHeight;
   };
 
   return (
     <div className="flex h-full min-h-0">
       <div className="relative flex min-w-0 flex-1 flex-col">
         <NowStrip session={session} now={now} />
+        <div className="flex justify-end border-b border-zinc-200 px-4 py-1 dark:border-zinc-800">
+          <button
+            onClick={toggleOrder}
+            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+          >
+            <ArrowDownUp size={11} /> {newestFirst ? 'newest first' : 'oldest first'}
+          </button>
+        </div>
         <div ref={scroller} onScroll={onScroll} className="flex-1 overflow-y-auto px-4 py-3">
-          {entries.map((en, i) => {
+          {shown.map((en, i) => {
             const Icon = en.icon;
             return (
               <details
@@ -139,7 +157,7 @@ export default function LiveFeed({ session, events, now }: { session: SessionInf
           })}
           {!entries.length && <p className="py-8 text-center text-xs text-zinc-400">No events yet for this session.</p>}
         </div>
-        {!follow && (
+        {!newestFirst && !follow && (
           <button
             onClick={() => { setFollow(true); scroller.current!.scrollTop = scroller.current!.scrollHeight; }}
             className="absolute right-4 bottom-4 inline-flex items-center gap-1.5 rounded-full bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white shadow-lg dark:bg-zinc-100 dark:text-zinc-900"
