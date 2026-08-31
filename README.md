@@ -165,6 +165,22 @@ zero-dependency server — end users need no build step.
 - UI development: `cd web && npm install && npm run dev` (Vite proxies `/api` + `/pm`
   to `127.0.0.1:7717`). Ship with `npm run build` and commit `web/dist/`.
 
+## Always-on server (launchd)
+
+Sessions bootstrap the server on demand (`SessionStart` → `boot.js`), but for
+phone/tailnet access after a reboot — before any session runs — install a
+LaunchAgent that starts it at login and keeps it alive (idle-exit disabled via
+`GOLDEN_EYE_IDLE_EXIT_MS=0`):
+
+```bash
+# plist: ~/Library/LaunchAgents/com.golden-eye.server.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.golden-eye.server.plist
+# remove: launchctl bootout gui/$(id -u)/com.golden-eye.server && rm the plist
+```
+
+`boot.js` detects the healthy launchd instance and stands down, so the two
+paths coexist; if the launchd server dies, KeepAlive restarts it.
+
 ## Remote access (Tailscale)
 
 The server binds 127.0.0.1 only. To reach it from other devices, proxy it onto
