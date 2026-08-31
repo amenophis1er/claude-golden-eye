@@ -1,3 +1,4 @@
+import { Bot } from 'lucide-react';
 import type { HookEvent } from '../lib/types';
 
 /**
@@ -52,8 +53,16 @@ export default function EventDetail({ event }: { event: HookEvent }) {
 
   return (
     <div className="mt-1.5 mr-2 ml-16">
-      {chips.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
+      {(chips.length > 0 || (p.agent_id && p.session_id)) && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {p.agent_id && p.session_id && (
+            <a
+              href={`#/s/${encodeURIComponent(p.session_id)}/agents/${encodeURIComponent(p.agent_id)}`}
+              className="inline-flex items-center gap-1 rounded-md bg-violet-100 px-2 py-0.5 text-[11px] font-medium text-violet-700 hover:bg-violet-200 dark:bg-violet-400/10 dark:text-violet-300 dark:hover:bg-violet-400/20"
+            >
+              <Bot size={11} /> open agent →
+            </a>
+          )}
           {chips.map(([k, v]) => (
             <span key={k} className="max-w-full truncate rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] dark:bg-zinc-800">
               <span className="text-zinc-400">{k}:</span>{' '}
