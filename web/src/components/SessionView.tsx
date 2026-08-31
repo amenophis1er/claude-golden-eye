@@ -32,7 +32,9 @@ export default function SessionView({ session: s, events, tab, sub, now }: {
   session: SessionInfo; events: HookEvent[]; tab: Tab; sub: string | null; now: number;
 }) {
   const sessionEvents = events.filter((e) => e.payload?.session_id === s.id);
-  const working = s.state === 'working' || s.state === 'active';
+  const fresh = now - Date.parse(s.lastActivity) < 10 * 60 * 1000;
+  const working = (s.state === 'working' || s.state === 'active') && fresh;
+  const stateLabel = working ? s.state : s.state === 'working' || s.state === 'active' ? 'stalled' : s.state;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -50,7 +52,7 @@ export default function SessionView({ session: s, events, tab, sub, now }: {
                   : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'
             }`}
           >
-            {s.state}
+            {stateLabel}
           </span>
           {s.pmMode && (
             <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-400/10 dark:text-amber-300">

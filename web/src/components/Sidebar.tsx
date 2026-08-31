@@ -7,10 +7,15 @@ import { baseName, relTime, shortId } from '../lib/format';
 import ThemeToggle from './ThemeToggle';
 
 const STALE_MS = 2 * 60 * 60 * 1000;
+// A genuinely working session emits hook events constantly; with none for
+// this long, a lingering state=working means the session died mid-turn
+// (killed terminal — Stop/SessionEnd never fired) and must not pin Active.
+const ACTIVE_FRESH_MS = 10 * 60 * 1000;
 
 function groupOf(s: SessionInfo, now: number): 'active' | 'idle' | 'stale' {
-  if (s.state === 'working' || s.state === 'active') return 'active';
-  if (s.state === 'ended' || now - Date.parse(s.lastActivity) > STALE_MS) return 'stale';
+  const age = now - Date.parse(s.lastActivity);
+  if ((s.state === 'working' || s.state === 'active') && age < ACTIVE_FRESH_MS) return 'active';
+  if (s.state === 'ended' || age > STALE_MS) return 'stale';
   return 'idle';
 }
 
