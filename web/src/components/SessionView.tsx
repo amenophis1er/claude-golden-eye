@@ -32,6 +32,8 @@ export default function SessionView({ session: s, events, tab, sub, now }: {
   session: SessionInfo; events: HookEvent[]; tab: Tab; sub: string | null; now: number;
 }) {
   const sessionEvents = events.filter((e) => e.payload?.session_id === s.id);
+  const delegates = s.agents.filter((a) => !a.mainAgent);
+  const delegatesRunning = delegates.some((a) => a.status === 'running' || a.status === 'starting');
   const fresh = now - Date.parse(s.lastActivity) < 10 * 60 * 1000;
   const working = (s.state === 'working' || s.state === 'active') && fresh;
   const stateLabel = working ? s.state : s.state === 'working' || s.state === 'active' ? 'stalled' : s.state;
@@ -109,6 +111,17 @@ export default function SessionView({ session: s, events, tab, sub, now }: {
               }`}
             >
               <Icon size={14} /> {label}
+              {id === 'agents' && delegates.length > 0 && (
+                <span
+                  className={`rounded-full px-1.5 text-[10px] tabular-nums ${
+                    delegatesRunning
+                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                      : 'bg-zinc-200 dark:bg-zinc-800'
+                  }`}
+                >
+                  {delegates.length}
+                </span>
+              )}
               {id === 'plan' && s.todos.length > 0 && (
                 <span className="rounded-full bg-zinc-200 px-1.5 text-[10px] tabular-nums dark:bg-zinc-800">{s.todos.length}</span>
               )}

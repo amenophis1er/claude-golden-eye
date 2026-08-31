@@ -1,4 +1,4 @@
-import { Bot, User } from 'lucide-react';
+import { Bot, CheckCircle2, User } from 'lucide-react';
 import type { AgentInfo, SessionInfo } from '../lib/types';
 import { fmtDur, relTime, shortId } from '../lib/format';
 import { navigate } from '../lib/router';
@@ -106,7 +106,11 @@ export default function AgentsPanel({ session, now, sub }: { session: SessionInf
                   : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
               }`}
             >
-              <span className={`h-1.5 w-1.5 rounded-full ${running ? 'bg-emerald-500 pulse-dot' : a.status === 'done' ? 'bg-zinc-300 dark:bg-zinc-600' : 'bg-sky-400'}`} />
+              {a.status === 'done' ? (
+                <CheckCircle2 size={13} className="shrink-0 text-emerald-500" />
+              ) : (
+                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${running ? 'bg-emerald-500 pulse-dot' : 'bg-sky-400'}`} />
+              )}
               {a.mainAgent ? <User size={12} /> : <Bot size={12} />}
               {tabLabel(a)}
             </button>
