@@ -4,6 +4,7 @@ import {
   Play, Power, ShieldX, TerminalSquare, TrendingUp, User,
 } from 'lucide-react';
 import type { HookEvent, SessionInfo } from '../lib/types';
+import EventDetail from './EventDetail';
 import { clock, fmtDur, toolSummary } from '../lib/format';
 
 interface Entry {
@@ -12,11 +13,17 @@ interface Entry {
   label: string;
   summary: string;
   raw: any;
+  event: HookEvent;
   ts: string;
   emphasis?: boolean; // red rows (denials, blocked)
 }
 
 function toEntry(e: HookEvent): Entry | null {
+  const base = baseEntry(e);
+  return base ? { ...base, event: e } : null;
+}
+
+function baseEntry(e: HookEvent): Omit<Entry, 'event'> | null {
   const p = e.payload ?? {};
   const who = p.agent_id ? `agent ${String(p.agent_id).slice(0, 6)}` : 'main';
   switch (e.__hook) {
@@ -126,9 +133,7 @@ export default function LiveFeed({ session, events, now }: { session: SessionInf
                   <span className={`shrink-0 text-xs font-medium ${en.emphasis ? 'text-red-600 dark:text-red-400' : ''}`}>{en.label}</span>
                   <span className="min-w-0 flex-1 truncate text-xs text-zinc-500">{en.summary}</span>
                 </summary>
-                <pre className="mt-1.5 ml-16 overflow-x-auto rounded-md bg-zinc-100 p-2.5 text-[11px] leading-relaxed dark:bg-zinc-900">
-                  {JSON.stringify(en.raw, null, 2)}
-                </pre>
+                <EventDetail event={en.event} />
               </details>
             );
           })}

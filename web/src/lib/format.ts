@@ -28,6 +28,6 @@ export function fmtDur(ms?: number | null) {
 /** One-line human summary of a tool_input. */
 export function toolSummary(input: any): string {
   if (!input || typeof input !== 'object') return '';
-  const v = input.command ?? input.description ?? input.file_path ?? input.prompt ?? input.query ?? input.subject ?? '';
+  const v = input.command ?? input.description ?? input.file_path ?? input.prompt ?? input.query ?? input.subject ?? input.skill ?? input.url ?? '';
   return String(v).slice(0, 160);
 }

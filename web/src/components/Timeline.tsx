@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { HookEvent } from '../lib/types';
 import { clock, toolSummary } from '../lib/format';
+import EventDetail from './EventDetail';
 
 const TONES: Record<string, string> = {
   UserPromptSubmit: 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300',
@@ -58,9 +59,7 @@ export default function Timeline({ events }: { events: HookEvent[] }) {
               </span>
               <span className="min-w-0 flex-1 truncate text-xs text-zinc-500">{summary(e)}</span>
             </summary>
-            <pre className="mt-1.5 ml-16 overflow-x-auto rounded-md bg-zinc-100 p-2.5 text-[11px] leading-relaxed dark:bg-zinc-900">
-              {JSON.stringify(e.payload, null, 2)}
-            </pre>
+            <EventDetail event={e} />
           </details>
         ))}
         {!shown.length && <p className="py-8 text-center text-xs text-zinc-400">No events.</p>}
