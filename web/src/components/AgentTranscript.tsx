@@ -23,7 +23,9 @@ export default function AgentTranscript({ sessionId, agentId, running, fill = fa
   const [model, setModel] = useState<string | null>(null);
   const [usage, setUsage] = useState<{ in: number; cacheRead: number; out: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [newestFirst, setNewestFirst] = useState(() => localStorage.getItem('ge-transcript-order') === 'newest');
+  // Newest-first by default, matching the Live feed; an explicit 'oldest'
+  // choice is respected.
+  const [newestFirst, setNewestFirst] = useState(() => localStorage.getItem('ge-transcript-order') !== 'oldest');
   const scroller = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
 
