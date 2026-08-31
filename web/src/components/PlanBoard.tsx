@@ -45,13 +45,15 @@ export default function PlanBoard({ session }: { session: SessionInfo }) {
   const inProgress = tasks.filter((t) => t.status === 'in_progress').length;
   const sorted = [...tasks].sort((a, b) => (ORDER[a.status] ?? 1) - (ORDER[b.status] ?? 1) || Number(a.id) - Number(b.id));
   return (
-    <div className="mx-auto h-full max-w-2xl overflow-y-auto p-5">
-      <p className="mb-2 px-3 text-xs text-zinc-400">
-        {tasks.length} task(s) · <span className="text-emerald-600 dark:text-emerald-400">{done} done</span>
-        {inProgress > 0 && <> · <span className="text-amber-600 dark:text-amber-400">{inProgress} in progress</span></>}
-        {' · '}{tasks.length - done - inProgress} open
-      </p>
-      {sorted.map((t, i) => <TaskRow key={t.id ?? i} t={t} all={tasks} />)}
+    <div className="h-full overflow-y-auto p-5">
+      <div className="max-w-3xl">
+        <p className="mb-2 px-3 text-xs text-zinc-400">
+          {tasks.length} task(s) · <span className="text-emerald-600 dark:text-emerald-400">{done} done</span>
+          {inProgress > 0 && <> · <span className="text-amber-600 dark:text-amber-400">{inProgress} in progress</span></>}
+          {' · '}{tasks.length - done - inProgress} open
+        </p>
+        {sorted.map((t, i) => <TaskRow key={t.id ?? i} t={t} all={tasks} />)}
+      </div>
     </div>
   );
 }
