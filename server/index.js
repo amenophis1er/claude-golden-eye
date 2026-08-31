@@ -11,7 +11,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const Store = require('./state');
-const { tailTranscript } = require('./transcript');
+const { tailTranscript, sessionStats } = require('./transcript');
 const { tasksForSession } = require('./tasks');
 const config = require('./config');
 
@@ -202,6 +202,7 @@ const server = http.createServer(async (req, res) => {
       for (const sess of snapshot.sessions) {
         const tasks = tasksForSession(sess.id, sess.transcriptPath);
         if (tasks) sess.todos = tasks;
+        sess.env = sessionStats(sess.transcriptPath); // branch/model/tokens/context
       }
       return sendJson(res, 200, snapshot);
     }

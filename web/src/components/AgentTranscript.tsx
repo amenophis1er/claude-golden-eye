@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowDownUp, Brain, MessageSquare, TerminalSquare, CornerDownRight } from 'lucide-react';
-import { clock } from '../lib/format';
+import { clock, fmtTokens } from '../lib/format';
 import Markdown from './Markdown';
 
 interface TEntry {
@@ -21,6 +21,7 @@ export default function AgentTranscript({ sessionId, agentId, running, fill = fa
 }) {
   const [entries, setEntries] = useState<TEntry[] | null>(null);
   const [model, setModel] = useState<string | null>(null);
+  const [usage, setUsage] = useState<{ in: number; cacheRead: number; out: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [newestFirst, setNewestFirst] = useState(() => localStorage.getItem('ge-transcript-order') === 'newest');
   const scroller = useRef<HTMLDivElement>(null);
@@ -42,6 +43,7 @@ export default function AgentTranscript({ sessionId, agentId, running, fill = fa
           setError(null);
           setEntries(j.entries ?? []);
           setModel(j.model ?? null);
+          setUsage(j.usage ?? null);
         }
       } catch {
         if (!dead) setError('server unreachable');
@@ -69,6 +71,11 @@ export default function AgentTranscript({ sessionId, agentId, running, fill = fa
       <span className="text-[11px] text-zinc-400">
         {model && (
           <>{running ? 'running on' : 'model'} <span className="rounded bg-violet-100 px-1.5 py-px font-mono text-violet-700 dark:bg-violet-400/10 dark:text-violet-300">{model}</span></>
+        )}
+        {usage && (usage.in > 0 || usage.out > 0) && (
+          <span className="ml-2 tabular-nums" title={`cache read ${fmtTokens(usage.cacheRead)}`}>
+            ↓ {fmtTokens(usage.in)} · ↑ {fmtTokens(usage.out)}
+          </span>
         )}
       </span>
       <button

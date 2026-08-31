@@ -1,7 +1,7 @@
-import { Activity, Bot, Crown, Radio, ScrollText, Target } from 'lucide-react';
+import { Activity, Bot, Crown, GitBranch, Radio, ScrollText, Target } from 'lucide-react';
 import type { HookEvent, SessionInfo } from '../lib/types';
 import { navigate, type Tab } from '../lib/router';
-import { baseName, relTime, shortId } from '../lib/format';
+import { baseName, fmtTokens, relTime, shortId } from '../lib/format';
 import LiveFeed from './LiveFeed';
 import AgentsPanel from './AgentsPanel';
 import Timeline from './Timeline';
@@ -34,7 +34,15 @@ export default function SessionView({ session: s, events, tab, sub, now }: {
   const delegatesRunning = delegates.some((a) => a.status === 'running' || a.status === 'starting');
   const fresh = now - Date.parse(s.lastActivity) < 10 * 60 * 1000;
   const working = (s.state === 'working' || s.state === 'active') && fresh;
-  const stateLabel = working ? s.state : s.state === 'working' || s.state === 'active' ? 'stalled' : s.state;
+  // After a Stop the session is done working and the ball is in the user's
+  // court — say so instead of the ambiguous "idle".
+  const stateLabel = working
+    ? s.state
+    : s.state === 'working' || s.state === 'active'
+      ? 'stalled'
+      : s.state === 'idle'
+        ? 'waiting for you'
+        : s.state;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -47,9 +55,9 @@ export default function SessionView({ session: s, events, tab, sub, now }: {
             className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
               working
                 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                : s.state === 'ended'
-                  ? 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'
-                  : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'
+                : stateLabel === 'waiting for you'
+                  ? 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300'
+                  : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'
             }`}
           >
             {stateLabel}
@@ -65,6 +73,25 @@ export default function SessionView({ session: s, events, tab, sub, now }: {
             </span>
           )}
           <span className="ml-auto text-xs text-zinc-400">active {relTime(s.lastActivity, now)}</span>
+        </div>
+
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-400">
+          <span className="max-w-[26rem] truncate font-mono" title={s.cwd ?? undefined}>{s.cwd}</span>
+          {s.env?.branch && (
+            <span className="inline-flex items-center gap-1"><GitBranch size={11} /> {s.env.branch}</span>
+          )}
+          {s.env?.model && (
+            <span className="rounded bg-violet-100 px-1.5 font-mono text-[11px] text-violet-700 dark:bg-violet-400/10 dark:text-violet-300">{s.env.model}</span>
+          )}
+          {s.env?.contextTokens != null && (
+            <span title="tokens in the last request's context (input + cache)">ctx {fmtTokens(s.env.contextTokens)}</span>
+          )}
+          {s.env && (
+            <span title={`main-session tokens${s.env.usageApprox ? ' (recent tail only)' : ''} · cache read ${fmtTokens(s.env.usage.cacheRead)}`}>
+              ↓ {fmtTokens(s.env.usage.in)} · ↑ {fmtTokens(s.env.usage.out)}{s.env.usageApprox ? '*' : ''}
+            </span>
+          )}
+          {s.env?.version && <span>v{s.env.version}</span>}
         </div>
 
         {s.mission && (

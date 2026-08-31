@@ -40,6 +40,14 @@ export interface SessionInfo {
   lastResult: string | null;
   todos: Todo[];
   stats: { spawns: number; toolCalls: number; mainWrites: number; denies: number };
+  env?: {
+    model: string | null;
+    branch: string | null;
+    version: string | null;
+    contextTokens: number | null;
+    usage: { in: number; cacheRead: number; out: number };
+    usageApprox: boolean;
+  } | null;
   agents: AgentInfo[];
 }
 
