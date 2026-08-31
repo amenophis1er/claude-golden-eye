@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowDownUp, Brain, MessageSquare, TerminalSquare, CornerDownRight } from 'lucide-react';
 import { clock } from '../lib/format';
+import Markdown from './Markdown';
 
 interface TEntry {
   ts: string | null;
@@ -83,7 +84,10 @@ export default function AgentTranscript({ sessionId, agentId, running, fill = fa
   if (!entries) return <p className="mt-1.5 text-[11px] text-zinc-400">loading…</p>;
   if (!entries.length) return <p className="mt-1.5 text-[11px] text-zinc-400">transcript is empty so far</p>;
 
-  const shown = newestFirst ? [...entries].reverse() : entries;
+  // Stable keys (original index) so newest-first inserts don't remount —
+  // and re-parse — every row on each poll.
+  const indexed = entries.map((en, idx) => ({ en, idx }));
+  const shown = newestFirst ? [...indexed].reverse() : indexed;
 
   return (
     <div className={fill ? 'flex min-h-0 flex-1 flex-col' : ''}>
@@ -96,7 +100,8 @@ export default function AgentTranscript({ sessionId, agentId, running, fill = fa
       }}
       className={`mt-1.5 overflow-y-auto rounded-md border border-zinc-200 bg-white p-2 dark:border-zinc-800 dark:bg-zinc-950/60 ${fill ? 'min-h-0 flex-1' : 'max-h-96'}`}
     >
-      {shown.map((en, i) => {
+      {shown.map(({ en, idx }) => {
+        const i = idx;
         if (en.kind === 'thinking')
           return (
             <details key={i} className="my-1 rounded px-1.5 py-0.5">
@@ -108,9 +113,9 @@ export default function AgentTranscript({ sessionId, agentId, running, fill = fa
           );
         if (en.kind === 'text')
           return (
-            <div key={i} className="my-2 flex gap-1.5 rounded-md bg-sky-50/60 px-1.5 py-1 dark:bg-sky-950/20">
-              <MessageSquare size={11} className="mt-0.5 shrink-0 text-sky-500" />
-              <p className="min-w-0 flex-1 text-xs leading-relaxed whitespace-pre-wrap">{en.text}</p>
+            <div key={i} className="my-2 flex gap-1.5 rounded-md bg-sky-50/60 px-1.5 py-1.5 dark:bg-sky-950/20">
+              <MessageSquare size={11} className="mt-1 shrink-0 text-sky-500" />
+              <Markdown text={en.text ?? ''} className="min-w-0 flex-1" />
               {en.ts && <span className="shrink-0 text-[10px] text-zinc-400 tabular-nums">{clock(en.ts)}</span>}
             </div>
           );
