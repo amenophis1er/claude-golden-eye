@@ -12,6 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const Store = require('./state');
 const { tailTranscript } = require('./transcript');
+const { tasksForSession } = require('./tasks');
 const config = require('./config');
 
 const HOST = process.env.GOLDEN_EYE_HOST || '127.0.0.1';
@@ -194,7 +195,15 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && url.pathname === '/api/state') {
-      return sendJson(res, 200, store.serialize());
+      const snapshot = store.serialize();
+      // Plan board: the on-disk task store is authoritative (it holds tasks
+      // created before hooks were watching); event-mirrored todos are the
+      // fallback when no store dir exists for the session.
+      for (const sess of snapshot.sessions) {
+        const tasks = tasksForSession(sess.id, sess.transcriptPath);
+        if (tasks) sess.todos = tasks;
+      }
+      return sendJson(res, 200, snapshot);
     }
 
     if (req.method === 'GET' && url.pathname === '/api/events') {

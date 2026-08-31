@@ -16,7 +16,14 @@ export interface AgentInfo {
   toolEvents: number;
 }
 
-export interface Todo { id?: string; content: string; status: string }
+export interface Todo {
+  id?: string;
+  content: string;
+  status: string;
+  description?: string | null;
+  activeForm?: string | null;
+  blockedBy?: string[];
+}
 
 export interface SessionInfo {
   id: string;
