@@ -33,7 +33,7 @@ function toolInputBrief(input) {
   return Object.keys(out).length ? out : null;
 }
 
-function parseLine(line, entries) {
+function parseLine(line, entries, meta) {
   let j;
   try {
     j = JSON.parse(line);
@@ -43,6 +43,8 @@ function parseLine(line, entries) {
   const ts = j.timestamp || null;
   const msg = j.message;
   if (j.type === 'assistant' && msg && Array.isArray(msg.content)) {
+    // Ground truth for "which model is this agent actually running on".
+    if (typeof msg.model === 'string' && msg.model) meta.model = msg.model;
     for (const c of msg.content) {
       if (!c || typeof c !== 'object') continue;
       if (c.type === 'thinking' && typeof c.thinking === 'string' && c.thinking.trim()) {
@@ -75,10 +77,11 @@ function tailTranscript(file) {
     let text = buf.toString('utf8');
     if (start > 0) text = text.slice(text.indexOf('\n') + 1); // drop partial first line
     const entries = [];
+    const meta = { model: null };
     for (const line of text.split('\n')) {
-      if (line.trim()) parseLine(line, entries);
+      if (line.trim()) parseLine(line, entries, meta);
     }
-    return { exists: true, size: stat.size, mtime: stat.mtime.toISOString(), entries: entries.slice(-MAX_ENTRIES) };
+    return { exists: true, size: stat.size, mtime: stat.mtime.toISOString(), model: meta.model, entries: entries.slice(-MAX_ENTRIES) };
   } catch (err) {
     return { exists: false, entries: [], error: err && err.code === 'ENOENT' ? 'not-found' : String((err && err.message) || err) };
   } finally {

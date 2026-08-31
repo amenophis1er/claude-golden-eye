@@ -62,6 +62,7 @@ function newAgent(overrides = {}) {
       id: null,            // bound claude agent_id once known
       boundId: null,       // same as id; null while unbound spawn placeholder
       spawnKey: null,      // which spawn slot the FIFO guess consumed (repairable)
+      model: null,         // requested model from spawn input (tool_input.model)
       mainAgent: false,
       type: null,          // e.g. "general-purpose", "main"
       description: null,   // delegation description (spawn payload)
@@ -262,6 +263,7 @@ class Store {
             status: 'starting',
             description: (p.tool_input && p.tool_input.description) || null,
             prompt: (p.tool_input && p.tool_input.prompt) || null,
+            model: (p.tool_input && p.tool_input.model) || null,
             startedAt: e.__ts,
           });
           s.stats.spawns += 1;
@@ -331,6 +333,9 @@ class Store {
             if (a) {
               if (p.duration_ms != null && a.durationMs == null) a.durationMs = p.duration_ms;
               if (resp.agentType && !a.type) a.type = resp.agentType;
+              // PostToolUse carries the input the tool actually ran with —
+              // including a model injected by the PMModelPin rewrite.
+              if (p.tool_input && p.tool_input.model) a.model = p.tool_input.model;
             }
           } else if (slot && p.duration_ms != null) {
             slot.durationMs = p.duration_ms;

@@ -8,6 +8,7 @@ export interface AgentInfo {
   startedAt: string | null;
   endedAt: string | null;
   durationMs: number | null;
+  model: string | null;
   lastMessage: string | null;
   lastTool: string | null;
   lastToolAt: string | null;

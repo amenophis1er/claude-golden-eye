@@ -234,3 +234,14 @@ test('SessionStart(resume) clears the ended state', () => {
   add(store, 'PreToolUse', { tool_name: 'Bash', tool_input: { command: 'ls' } });
   assert.equal(session(store).state, 'working');
 });
+
+test('spawn records the requested model, PostToolUse input (post-pin) wins', () => {
+  const store = freshStore();
+  add(store, 'PreToolUse', { tool_name: 'Agent', tool_use_id: 't_m', tool_input: { description: 'd', prompt: 'p' } });
+  add(store, 'PostToolUse', {
+    tool_name: 'Agent', tool_use_id: 't_m',
+    tool_input: { description: 'd', prompt: 'p', model: 'opus' },
+    tool_response: { agentId: 'M1', agentType: 'general-purpose' },
+  });
+  assert.equal(session(store).agents['agent:M1'].model, 'opus');
+});

@@ -34,6 +34,11 @@ function AgentDetail({ a, now, sessionId }: { a: AgentInfo; now: number; session
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
         {a.type && !a.mainAgent && <span>{a.type}</span>}
         {!a.mainAgent && a.id && <span className="font-mono">{shortId(a.id)}</span>}
+        {a.model && (
+          <span className="rounded bg-violet-100 px-1.5 font-mono text-[11px] text-violet-700 dark:bg-violet-400/10 dark:text-violet-300">
+            {a.model}
+          </span>
+        )}
         {a.durationMs != null && <span>{fmtDur(a.durationMs)}</span>}
         {a.status !== 'done' && a.startedAt && <span>started {relTime(a.startedAt, now)}</span>}
         {a.lastTool && <span>last: {a.lastTool}</span>}

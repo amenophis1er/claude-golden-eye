@@ -19,6 +19,7 @@ export default function AgentTranscript({ sessionId, agentId, running }: {
   sessionId: string; agentId?: string | null; running: boolean;
 }) {
   const [entries, setEntries] = useState<TEntry[] | null>(null);
+  const [model, setModel] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
@@ -38,6 +39,7 @@ export default function AgentTranscript({ sessionId, agentId, running }: {
         } else {
           setError(null);
           setEntries(j.entries ?? []);
+          setModel(j.model ?? null);
         }
       } catch {
         if (!dead) setError('server unreachable');
@@ -53,11 +55,19 @@ export default function AgentTranscript({ sessionId, agentId, running }: {
     if (el && pinned.current) el.scrollTop = el.scrollHeight;
   }, [entries]);
 
+  const modelBadge = model && (
+    <div className="mb-1 text-[11px] text-zinc-400">
+      running on <span className="rounded bg-violet-100 px-1.5 py-px font-mono text-violet-700 dark:bg-violet-400/10 dark:text-violet-300">{model}</span>
+    </div>
+  );
+
   if (error) return <p className="mt-1.5 text-[11px] text-zinc-400">{error}</p>;
   if (!entries) return <p className="mt-1.5 text-[11px] text-zinc-400">loading…</p>;
   if (!entries.length) return <p className="mt-1.5 text-[11px] text-zinc-400">transcript is empty so far</p>;
 
   return (
+    <div>
+    {modelBadge}
     <div
       ref={scroller}
       onScroll={() => {
@@ -101,6 +111,7 @@ export default function AgentTranscript({ sessionId, agentId, running }: {
           </div>
         );
       })}
+    </div>
     </div>
   );
 }
