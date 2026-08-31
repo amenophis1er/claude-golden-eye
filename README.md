@@ -107,13 +107,25 @@ idle 30 min + no dashboard open  →  server shuts itself down
 Default data dir: `~/.golden-eye/` (all projects converge). Manual run stays available:
 `node server/index.js`.
 
-## Dashboard panels
+## Dashboard tour
 
-- **Mission** — state, PM pill, mission text, progress bar, last prompt/turn result
-- **Agent tree** — main + subagents: status, delegation prompt, final report, tool histograms
-- **Plan board** — mirrored from `TaskCreate`/`TaskUpdate` (legacy `TodoWrite` too)
-- **Discipline** — delegations, tool calls, main-session writes, writes blocked by PM
-- **Event timeline** — every hook event with MAIN/agent attribution and deny markers
+- **Header** — state chip (`working` / blue `waiting for you` / `stalled` / `ended`),
+  PM badge, mission with `#N` task references resolved against the task store,
+  and an env line: project path · git branch · permission mode · model ·
+  `ctx <tokens>` · `↓in ↑out` tokens · Claude Code version (all read from the
+  session transcript).
+- **Live tab** — newest-first event feed (toggleable) with a "now" strip of running
+  agents; expanded rows show structured detail (commands, prompts, `open agent →`
+  links) with raw JSON one click deeper. Resizable right rail: last prompt
+  (task-notifications rendered as cards), latest main output (markdown), compact
+  plan (in-progress → open → completed).
+- **Agents tab** — sub-tabs: Main session pinned first, live delegates next,
+  finished ones collapsed into a `Done (N)` dropdown. Per-agent detail:
+  properties/model/tokens on the left, full-height **live transcript** on the
+  right (thinking, markdown prose, tool calls + expandable results; 2.5 s poll).
+- **Timeline tab** — every hook event, filterable by type.
+- **Sidebar** — sessions grouped Active / Idle / Stale (freshness-gated), per-session
+  and bulk prune (persisted as tombstones).
 
 ## Architecture
 
@@ -121,12 +133,15 @@ Default data dir: `~/.golden-eye/` (all projects converge). Manual run stays ava
 hooks/   (one thin process per Claude hook event, fail-soft)
   ├── JSONL log .probe/hook-events.jsonl   (fallback, always)
   └── POST /ingest → server (port from server.json, best-effort)
-server/  singleton node process (no dependencies, no build step)
-  ├── index.js   HTTP ingest + /pm bridge + /mcp/attach + SSE + static hosting
-  ├── state.js   event store + reducer (sessions, agents, tasks, progress) — replay on boot
+server/  singleton node process (zero runtime dependencies)
+  ├── index.js       HTTP ingest + /pm bridge + /mcp/attach + /api/prune
+  │                  + /api/agent-transcript + SSE + static hosting (web/dist)
+  ├── state.js       event store + reducer (sessions, agents, tasks) — replay on boot
+  ├── transcript.js  passive JSONL tail: per-agent transcripts, usage/branch/model stats
+  ├── tasks.js       reads Claude Code's task store (<config>/tasks/<session>/*.json)
   ├── mcp-server.js  stdio JSON-RPC (report_progress, get_mission)
-  └── boot.js    idempotent singleton bootstrap (SessionStart)
-web/     vanilla-JS dashboard (SSE live, textContent only)
+  └── boot.js        idempotent singleton bootstrap (SessionStart, stale-lock safe)
+web/     React + Vite + Tailwind dashboard (src/ → committed dist/, no build for users)
 ```
 
 ## Environment variables
@@ -145,7 +160,8 @@ web/     vanilla-JS dashboard (SSE live, textContent only)
 
 - Spawn→child binding: deterministic at collection (`PostToolUse(Agent).tool_response.agentId`);
   early FIFO hint can mis-label under parallel spawns until the repair lands.
-- Plan board mirrors the `TaskCreate`/`TaskUpdate` system + legacy `TodoWrite`.
+- Plan data: the on-disk task store is authoritative; `TaskCreate`/`TaskUpdate`
+  (+ legacy `TodoWrite`) events are the fallback when no store dir exists.
 - Denied calls appear as `PRE` rows without `POST` (Pre-without-Post = denial signal).
 - `startSource: null` means the session was observed without a `SessionStart` (attached mid-stream).
 - Probe rig and findings for the original M0 payload discovery: [probe/](probe/).
@@ -173,13 +189,15 @@ LaunchAgent that starts it at login and keeps it alive (idle-exit disabled via
 `GOLDEN_EYE_IDLE_EXIT_MS=0`):
 
 ```bash
-# plist: ~/Library/LaunchAgents/com.golden-eye.server.plist
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.golden-eye.server.plist
-# remove: launchctl bootout gui/$(id -u)/com.golden-eye.server && rm the plist
+./deploy/install-launchd.sh   # writes the plist (node + repo paths resolved) and loads it
+# remove:
+launchctl bootout gui/$(id -u)/com.golden-eye.server
+rm ~/Library/LaunchAgents/com.golden-eye.server.plist
 ```
 
-`boot.js` detects the healthy launchd instance and stands down, so the two
-paths coexist; if the launchd server dies, KeepAlive restarts it.
+`boot.js` detects the healthy launchd instance and stands down, so the two paths
+coexist; if the launchd server dies, KeepAlive restarts it. After server-code
+changes: `launchctl kickstart -k gui/$(id -u)/com.golden-eye.server`.
 
 ## Remote access (Tailscale)
 
