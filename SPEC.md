@@ -69,7 +69,7 @@ claude-golden-eye/
 │   ├── index.js                 # single process: ingest + PM API + SSE + static
 │   ├── state.js                 # sessions/agents/events reducer + JSONL replay
 │   └── mcp-server.js            # stdio JSON-RPC: report_progress / get_mission
-├── web/                         # dashboard (SSE live, no build step)
+├── web/                         # React+Vite dashboard (src/ → committed dist/)
 ├── commands/pm.md               # /pm → toggle manager mode
 ├── test/state.test.js           # reducer tests — `node --test`
 └── SPEC.md

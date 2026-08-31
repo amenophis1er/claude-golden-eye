@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+@custom-variant dark {
+  &:where(.dark, .dark *) {
+    @slot;
+  }
+}
+
+:root { color-scheme: light; }
+.dark { color-scheme: dark; }
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.pulse-dot { animation: pulse-dot 1.6s ease-in-out infinite; }
+
+* { scrollbar-width: thin; scrollbar-color: rgb(161 161 170 / 0.4) transparent; }

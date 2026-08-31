@@ -71,13 +71,38 @@ function maybeNotify(ev) {
 const store = new Store();
 const sseClients = new Set();
 
-// Only fixed filenames are served — no path traversal surface.
-const STATIC_FILES = {
-  '/': ['index.html', 'text/html; charset=utf-8'],
-  '/index.html': ['index.html', 'text/html; charset=utf-8'],
-  '/style.css': ['style.css', 'text/css; charset=utf-8'],
-  '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
+// Static hosting for the built dashboard (web/dist, hashed asset names).
+// Resolved paths are verified to stay inside DIST_DIR — no traversal surface.
+const DIST_DIR = path.join(WEB_DIR, 'dist');
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.map': 'application/json; charset=utf-8',
+  '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
 };
+
+function serveStatic(res, pathname) {
+  let rel = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
+  let file = path.normalize(path.join(DIST_DIR, rel));
+  if (!file.startsWith(DIST_DIR + path.sep) && file !== path.join(DIST_DIR, 'index.html')) return false;
+  if (!fs.existsSync(file) || !fs.statSync(file).isFile()) {
+    // Unknown GET path → SPA entry (hash routing handles the rest).
+    file = path.join(DIST_DIR, 'index.html');
+    if (!fs.existsSync(file)) return false;
+  }
+  const type = MIME[path.extname(file)] || 'application/octet-stream';
+  const body = fs.readFileSync(file);
+  res.writeHead(200, {
+    'Content-Type': type,
+    // Hashed assets are immutable; everything else must revalidate.
+    'Cache-Control': /assets\//.test(file) ? 'public, max-age=31536000, immutable' : 'no-store',
+  });
+  res.end(body);
+  return true;
+}
 
 function sendJson(res, code, obj) {
   const body = JSON.stringify(obj);
@@ -187,17 +212,31 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, pmView(sid));
     }
 
+    if (req.method === 'POST' && url.pathname === '/api/prune') {
+      // Remove sessions from the dashboard. Persisted as SessionPrune
+      // tombstones so an events.jsonl replay does not resurrect them.
+      const body = await readJsonBody(req);
+      const ids = [];
+      if (body && Array.isArray(body.sessionIds)) {
+        for (const id of body.sessionIds) if (store.sessions.has(id)) ids.push(id);
+      } else if (body && body.staleBefore) {
+        for (const s of store.sessions.values()) {
+          if (String(s.lastActivity) < String(body.staleBefore) && s.state !== 'working') ids.push(s.id);
+        }
+      }
+      for (const id of ids) {
+        const ev = store.addEvent({ __hook: 'SessionPrune', payload: { session_id: id } });
+        if (ev) broadcast(ev);
+      }
+      lastEventAt = Date.now();
+      return sendJson(res, 200, { ok: true, pruned: ids });
+    }
+
     if (req.method === 'GET' && url.pathname === '/healthz') {
       return sendJson(res, 200, { ok: true, name: 'golden-eye', sessions: store.sessions.size, clients: sseClients.size });
     }
 
-    const stat = STATIC_FILES[url.pathname];
-    if (req.method === 'GET' && stat) {
-      const [file, type] = stat;
-      const body = fs.readFileSync(path.join(WEB_DIR, file));
-      res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-store' });
-      return res.end(body);
-    }
+    if (req.method === 'GET' && serveStatic(res, url.pathname)) return;
 
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('not found');

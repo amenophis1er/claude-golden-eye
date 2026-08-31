@@ -142,6 +142,21 @@ web/     vanilla-JS dashboard (SSE live, textContent only)
 - `startSource: null` means the session was observed without a `SessionStart` (attached mid-stream).
 - Probe rig and findings for the original M0 payload discovery: [probe/](probe/).
 
+## Dashboard UI
+
+React + Vite + Tailwind (lucide icons, light/dark mode, hash-routed deep links like
+`#/s/<session>/agents`). The built app is committed at `web/dist/` and served by the
+zero-dependency server — end users need no build step.
+
+- Sessions are grouped **Active / Idle / Stale** in the sidebar; stale ones can be
+  pruned per-session or in bulk (persisted as `SessionPrune` tombstones so a server
+  restart doesn't resurrect them). A `SessionEnd` hook marks closed sessions.
+- The **Live** tab is the realtime view: a "now" strip of running agents (current
+  tool + elapsed), an auto-following event feed (click any row for the raw payload),
+  and a full-height panel with the main agent's latest prompt/output.
+- UI development: `cd web && npm install && npm run dev` (Vite proxies `/api` + `/pm`
+  to `127.0.0.1:7717`). Ship with `npm run build` and commit `web/dist/`.
+
 ## Development
 
 - `node --test` — reducer tests for `server/state.js` (agent FIFO binding + repair,

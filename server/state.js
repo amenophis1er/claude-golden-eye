@@ -193,6 +193,12 @@ class Store {
   reduce(e) {
     const p = e.payload || {};
     if (!p.session_id) return;
+    if (e.__hook === 'SessionPrune') {
+      // Tombstone: must not pass through getOrCreateSession (it would
+      // resurrect the session it is deleting).
+      this.sessions.delete(p.session_id);
+      return;
+    }
     const s = this.getOrCreateSession(p, e.__ts);
     s.lastActivity = e.__ts;
 
@@ -359,6 +365,11 @@ class Store {
         }
         if (p.last_assistant_message != null) a.lastMessage = p.last_assistant_message;
         if (p.agent_transcript_path) a.transcriptPath = p.agent_transcript_path;
+        break;
+      }
+
+      case 'SessionEnd': {
+        s.state = 'ended';
         break;
       }
 
