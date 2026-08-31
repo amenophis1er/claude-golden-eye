@@ -1,0 +1,5 @@
+# Claude Code artifacts
+.probe/
+probe/test-project/
+node_modules/
+.golden-eye/

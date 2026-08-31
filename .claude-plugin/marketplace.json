@@ -1,0 +1,13 @@
+{
+  "name": "claude-golden-eye",
+  "owner": { "name": "amen" },
+  "description": "Local marketplace for the golden-eye plugin: live Claude Code session oversight + PM-mode discipline.",
+  "plugins": [
+    {
+      "name": "claude-golden-eye",
+      "source": "./",
+      "description": "Live session oversight + PM-mode discipline for Claude Code (hooks + MCP + dashboard)",
+      "version": "0.1.0"
+    }
+  ]
+}

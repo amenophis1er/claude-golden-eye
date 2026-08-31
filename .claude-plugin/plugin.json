@@ -1,0 +1,13 @@
+{
+  "name": "claude-golden-eye",
+  "description": "Live session oversight + PM-mode discipline for Claude Code. Observer (M1) + PM charter/enforcement (M2) + MCP progress reporting (M3).",
+  "version": "0.1.0",
+  "author": { "name": "amen" },
+  "keywords": ["monitoring", "hooks", "subagents", "observability"],
+  "mcpServers": {
+    "golden-eye": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/server/mcp-server.js"]
+    }
+  }
+}
