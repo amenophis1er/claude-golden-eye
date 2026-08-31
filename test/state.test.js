@@ -223,3 +223,14 @@ test('Stop older than the latest prompt does not flip the session to idle', () =
   assert.equal(session(store).state, 'working');
   assert.equal(session(store).lastResult, 'prev turn ended', 'result still recorded');
 });
+
+test('SessionStart(resume) clears the ended state', () => {
+  const store = freshStore();
+  add(store, 'UserPromptSubmit', { prompt: 'work' });
+  add(store, 'SessionEnd', { reason: 'prompt_input_exit' });
+  assert.equal(session(store).state, 'ended');
+  add(store, 'SessionStart', { source: 'resume' });
+  assert.equal(session(store).state, 'idle');
+  add(store, 'PreToolUse', { tool_name: 'Bash', tool_input: { command: 'ls' } });
+  assert.equal(session(store).state, 'working');
+});

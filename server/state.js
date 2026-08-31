@@ -207,6 +207,9 @@ class Store {
       case 'SessionStart': {
         // Fires in normal (non-sandboxed) runs, e.g. source "startup".
         if (p.source && !s.startSource) s.startSource = p.source;
+        // A start (fresh or "resume") supersedes any earlier SessionEnd —
+        // without this, a restarted session stays labeled "ended"/stale.
+        s.state = 'idle';
         break;
       }
 
