@@ -104,7 +104,10 @@ export default function AgentsPanel({ session, now, sub }: { session: SessionInf
   // holds Main + live agents.
   const doneDelegates = delegates.filter((a) => !isLive(a));
   const ordered = main ? [main, ...delegates] : delegates;
-  const [menuOpen, setMenuOpen] = useState(false);
+  // Menu position is captured from the button rect and rendered
+  // position:fixed — the tab bar is an overflow-x-auto scroll container,
+  // which clips absolutely-positioned children on BOTH axes.
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
 
   const selected =
     (sub && sub !== 'main' && ordered.find((a) => a.id === sub)) ||
@@ -136,20 +139,30 @@ export default function AgentsPanel({ session, now, sub }: { session: SessionInf
           </button>
         ))}
         {doneDelegates.length > 0 && (
-          <div className="relative shrink-0">
-            <button onClick={() => setMenuOpen((o) => !o)} className={tabCls(selectedIsDone)}>
+          <div className="shrink-0">
+            <button
+              onClick={(e) => {
+                if (menuPos) return setMenuPos(null);
+                const r = e.currentTarget.getBoundingClientRect();
+                setMenuPos({ top: r.bottom + 4, left: Math.min(r.left, window.innerWidth - 300) });
+              }}
+              className={tabCls(selectedIsDone)}
+            >
               <CheckCircle2 size={13} className="shrink-0 text-emerald-500" />
               {selectedIsDone && selected ? tabLabel(selected) : `Done (${doneDelegates.length})`}
-              <ChevronDown size={12} className={`transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown size={12} className={`transition-transform ${menuPos ? 'rotate-180' : ''}`} />
             </button>
-            {menuOpen && (
+            {menuPos && (
               <>
-                <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-                <div className="absolute left-0 z-20 mt-1 max-h-80 w-72 overflow-y-auto rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                <div className="fixed inset-0 z-10" onClick={() => setMenuPos(null)} />
+                <div
+                  className="fixed z-20 max-h-80 w-72 overflow-y-auto rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+                  style={{ top: menuPos.top, left: menuPos.left }}
+                >
                   {doneDelegates.map((a, i) => (
                     <button
                       key={a.id ?? i}
-                      onClick={() => { setMenuOpen(false); if (a.id) navigate(session.id, 'agents', a.id); }}
+                      onClick={() => { setMenuPos(null); if (a.id) navigate(session.id, 'agents', a.id); }}
                       className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 ${
                         selected === a ? 'font-semibold' : ''
                       }`}
