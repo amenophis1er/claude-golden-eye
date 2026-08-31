@@ -201,3 +201,15 @@ test('resumed session: TaskUpdate upserts unknown tasks; TaskList hydrates subje
     { id: '4', content: 'deploy grafana', status: 'pending' },
   ]);
 });
+
+test('late Stop cannot pin an active session on idle: tool events mark working', () => {
+  const store = freshStore();
+  add(store, 'UserPromptSubmit', { prompt: 'go' });
+  // next turn's prompt arrives, then the PREVIOUS turn's Stop lands late
+  add(store, 'UserPromptSubmit', { prompt: '<task-notification>...' });
+  add(store, 'Stop', { last_assistant_message: 'turn ended' });
+  assert.equal(session(store).state, 'idle', 'stop still wins with no later activity');
+
+  add(store, 'PreToolUse', { tool_name: 'Bash', tool_input: { command: 'kubectl get pods' } });
+  assert.equal(session(store).state, 'working', 'tool activity flips it back');
+});

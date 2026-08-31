@@ -247,6 +247,10 @@ class Store {
       }
 
       case 'PreToolUse': {
+        // Tool activity IS work. Stop and the next UserPromptSubmit can land
+        // out of order (separate hook processes, same second), so never let
+        // a late-arriving Stop leave an actively-ticking session on "idle".
+        s.state = 'working';
         const tool = p.tool_name || '?';
         if (SPAWN_TOOLS.has(tool)) {
           const key = 'spawn:' + (p.tool_use_id || e.__ts);
@@ -273,6 +277,7 @@ class Store {
       }
 
       case 'PostToolUse': {
+        s.state = 'working'; // see PreToolUse note
         const tool = p.tool_name || '?';
         if (SPAWN_TOOLS.has(tool)) {
           // Collection event: tool_response.agentId gives the DETERMINISTIC
