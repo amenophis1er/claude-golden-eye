@@ -415,7 +415,12 @@ class Store {
       }
 
       case 'Stop': {
-        s.state = 'idle';
+        // A Stop that lands after a NEWER prompt (hook processes race within
+        // the same second) must not flip the fresh turn back to idle. The
+        // hook-side __ts timestamps carry ms precision, so compare those.
+        if (!(s.lastPromptAt && String(s.lastPromptAt) > String(e.__ts))) {
+          s.state = 'idle';
+        }
         if (p.last_assistant_message != null) s.lastResult = p.last_assistant_message;
         break;
       }

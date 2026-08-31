@@ -213,3 +213,13 @@ test('late Stop cannot pin an active session on idle: tool events mark working',
   add(store, 'PreToolUse', { tool_name: 'Bash', tool_input: { command: 'kubectl get pods' } });
   assert.equal(session(store).state, 'working', 'tool activity flips it back');
 });
+
+test('Stop older than the latest prompt does not flip the session to idle', () => {
+  const store = freshStore();
+  const early = new Date(1700000000000).toISOString();
+  const late = new Date(1700000000500).toISOString();
+  store.addEvent({ __hook: 'UserPromptSubmit', __ts: late, payload: { session_id: SID, cwd: '/tmp/x', prompt: 'next turn' } }, { persist: false });
+  store.addEvent({ __hook: 'Stop', __ts: early, payload: { session_id: SID, cwd: '/tmp/x', last_assistant_message: 'prev turn ended' } }, { persist: false });
+  assert.equal(session(store).state, 'working');
+  assert.equal(session(store).lastResult, 'prev turn ended', 'result still recorded');
+});
