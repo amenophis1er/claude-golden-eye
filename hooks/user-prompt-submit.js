@@ -46,8 +46,11 @@ async function main() {
       // turn "/pm off" into an accidental re-engage).
       const m = prompt.match(/arguments:\s*"([\s\S]*)"/i);
       pmArgs = m ? m[1].trim() : '';
-    } else if (/^\s*\/pm\b/.test(prompt)) {
-      pmArgs = prompt.replace(/^\s*\/pm\b/, '').trim();
+    } else if (/^\s*\/(?:[\w.-]+:)?pm\b/.test(prompt)) {
+      // Raw command text. Matches both "/pm ..." and the plugin-namespaced
+      // "/claude-golden-eye:pm ..." — plugin commands reach this hook as raw
+      // text (unexpanded), so this path is the one that fires in practice.
+      pmArgs = prompt.replace(/^\s*\/(?:[\w.-]+:)?pm\b/, '').trim();
     }
 
     if (pmArgs !== null) {

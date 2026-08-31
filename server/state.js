@@ -335,10 +335,42 @@ class Store {
               status: 'pending',
             });
           } else if (tool === 'TaskUpdate') {
-            const tid = String((p.tool_input && p.tool_input.taskId) ?? '');
-            const st = p.tool_input && p.tool_input.status;
+            const inp = p.tool_input || {};
+            const tid = String(inp.taskId ?? '');
             const item = s.tasks.find((t) => t.id === tid);
-            if (item && st) item.status = st;
+            if (item) {
+              if (inp.status) item.status = inp.status;
+              if (inp.subject) item.content = inp.subject;
+            } else if (tid) {
+              // Resumed session: TaskCreate predates our hooks — upsert so
+              // the plan board isn't blind to pre-resume tasks.
+              s.tasks.push({ id: tid, content: inp.subject || 'task ' + tid, status: inp.status || 'pending' });
+            }
+          } else if (tool === 'TaskList' || tool === 'TaskGet') {
+            // Hydrate the board from list/get responses (fills in subjects
+            // and statuses for tasks created before we were watching).
+            const resp = p.tool_response;
+            const arr = Array.isArray(resp)
+              ? resp
+              : resp && Array.isArray(resp.tasks)
+                ? resp.tasks
+                : resp && resp.task && typeof resp.task === 'object'
+                  ? [resp.task]
+                  : [];
+            for (const t of arr) {
+              if (!t || typeof t !== 'object') continue;
+              const tid = String(t.taskId ?? t.id ?? '');
+              if (!tid) continue;
+              const content = t.subject ?? t.content ?? null;
+              const status = t.status ?? null;
+              const item = s.tasks.find((x) => x.id === tid);
+              if (item) {
+                if (content) item.content = content;
+                if (status) item.status = status;
+              } else {
+                s.tasks.push({ id: tid, content: content || 'task ' + tid, status: status || 'pending' });
+              }
+            }
           } else if (tool === 'TodoWrite') {
             const t = (p.tool_input && p.tool_input.todos) || (p.tool_response && p.tool_response.todos);
             if (Array.isArray(t)) s.todos = t;

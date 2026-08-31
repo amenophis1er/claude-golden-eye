@@ -183,3 +183,21 @@ test('rotateLines preserves PMSync/SessionStart for sessions kept in the tail', 
   assert.equal(hooksForSession('evicted').length, 0, 'evicted session events stay dropped');
   assert.equal(rotated.length, 1000 + 2);
 });
+
+test('resumed session: TaskUpdate upserts unknown tasks; TaskList hydrates subjects', () => {
+  const store = freshStore();
+  add(store, 'PostToolUse', { tool_name: 'TaskUpdate', tool_input: { taskId: 3, status: 'in_progress' } });
+  let out = store.serialize().sessions.find((x) => x.id === SID);
+  assert.deepEqual(out.todos, [{ id: '3', content: 'task 3', status: 'in_progress' }]);
+
+  add(store, 'PostToolUse', {
+    tool_name: 'TaskList',
+    tool_input: {},
+    tool_response: { tasks: [{ taskId: 3, subject: 'wire telegram alerts', status: 'in_progress' }, { taskId: 4, subject: 'deploy grafana', status: 'pending' }] },
+  });
+  out = store.serialize().sessions.find((x) => x.id === SID);
+  assert.deepEqual(out.todos, [
+    { id: '3', content: 'wire telegram alerts', status: 'in_progress' },
+    { id: '4', content: 'deploy grafana', status: 'pending' },
+  ]);
+});
