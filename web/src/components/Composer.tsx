@@ -53,6 +53,13 @@ export default function Composer({ session }: { session: SessionInfo }) {
           <KeyRound size={13} className="shrink-0 text-amber-500" />
           <input
             type="password"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                send();
+              }
+            }}
             value={token}
             onChange={(e) => {
               setToken(e.target.value);

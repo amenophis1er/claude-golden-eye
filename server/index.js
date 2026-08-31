@@ -321,6 +321,14 @@ const server = http.createServer(async (req, res) => {
       }
       const bin = findClaudeBin();
       if (!bin) return sendJson(res, 500, { error: 'claude binary not found from the server environment' });
+      // Sessions may belong to a non-default instance (CLAUDE_CONFIG_DIR).
+      // The transcript lives at <config-root>/projects/<proj>/<sid>.jsonl —
+      // derive the root so --resume looks in the right store.
+      const env = { ...process.env };
+      if (sess.transcriptPath) {
+        const root = path.dirname(path.dirname(path.dirname(sess.transcriptPath)));
+        if (path.basename(root).startsWith('.claude')) env.CLAUDE_CONFIG_DIR = root;
+      }
       let fd = 'ignore';
       try {
         fd = fs.openSync(path.join(config.DATA_DIR, 'continue.log'), 'a');
@@ -329,7 +337,7 @@ const server = http.createServer(async (req, res) => {
         cwd: sess.cwd,
         detached: true,
         stdio: ['ignore', fd, fd],
-        env: { ...process.env },
+        env,
       });
       child.unref();
       const ev = store.addEvent({
