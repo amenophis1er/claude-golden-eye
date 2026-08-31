@@ -72,7 +72,28 @@ export default function SessionView({ session: s, events, tab, sub, now }: {
         {s.mission && (
           <div className="mt-2 flex items-start gap-2 text-sm text-zinc-600 dark:text-zinc-300">
             <Target size={14} className="mt-0.5 shrink-0 text-amber-500" />
-            <span className="line-clamp-2">{s.mission}</span>
+            <div className="min-w-0">
+              <span className="line-clamp-2">{s.mission}</span>
+              {/* "#N" in the mission usually references a task — resolve it
+                  against the session's task store so the header says what
+                  the mission actually is. */}
+              {[...new Set(s.mission.match(/#\d+/g) ?? [])]
+                .map((r) => s.todos.find((t) => t.id === r.slice(1)))
+                .filter((t): t is NonNullable<typeof t> => !!t)
+                .map((t) => (
+                  <div key={t.id} className="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-500">
+                    <span className="text-zinc-400 tabular-nums">#{t.id}</span>
+                    <span className="min-w-0 truncate">{t.content}</span>
+                    <span className={`shrink-0 rounded-full px-1.5 text-[10px] ${
+                      t.status === 'completed'
+                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                        : t.status === 'in_progress'
+                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-400/10 dark:text-amber-300'
+                          : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'
+                    }`}>{t.status}</span>
+                  </div>
+                ))}
+            </div>
           </div>
         )}
 
