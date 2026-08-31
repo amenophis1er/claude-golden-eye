@@ -93,7 +93,13 @@ function AgentDetail({ a, now, sessionId }: { a: AgentInfo; now: number; session
 
 export default function AgentsPanel({ session, now, sub }: { session: SessionInfo; now: number; sub: string | null }) {
   const main = session.agents.find((a) => a.mainAgent);
-  const delegates = session.agents.filter((a) => !a.mainAgent);
+  // Active delegates sit next to Main (newest start first); finished ones
+  // age rightward (most recently finished first).
+  const isLive = (a: AgentInfo) => a.status === 'running' || a.status === 'starting';
+  const sortTs = (a: AgentInfo) => Date.parse((isLive(a) ? a.startedAt : a.endedAt || a.startedAt) || '') || 0;
+  const delegates = session.agents
+    .filter((a) => !a.mainAgent)
+    .sort((x, y) => Number(isLive(y)) - Number(isLive(x)) || sortTs(y) - sortTs(x));
   const ordered = main ? [main, ...delegates] : delegates;
 
   const selected =
