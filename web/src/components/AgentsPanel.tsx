@@ -1,7 +1,7 @@
 import { Bot, User } from 'lucide-react';
 import type { AgentInfo, SessionInfo } from '../lib/types';
-import { fmtDur, relTime } from '../lib/format';
-import { useState } from 'react';
+import { fmtDur, relTime, shortId } from '../lib/format';
+import { navigate } from '../lib/router';
 import AgentTranscript from './AgentTranscript';
 
 function StatusPill({ status }: { status: AgentInfo['status'] }) {
@@ -13,12 +13,17 @@ function StatusPill({ status }: { status: AgentInfo['status'] }) {
   return <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${map[status] ?? map.done}`}>{status}</span>;
 }
 
-function AgentCard({ a, now, sessionId }: { a: AgentInfo; now: number; sessionId: string }) {
-  const topTools = Object.entries(a.tools).sort((x, y) => y[1] - x[1]).slice(0, 6);
-  const [showTranscript, setShowTranscript] = useState(false);
+function tabLabel(a: AgentInfo) {
+  if (a.mainAgent) return 'Main session';
+  const t = a.description ?? a.type ?? shortId(a.id);
+  return t.length > 28 ? t.slice(0, 28) + '…' : t;
+}
+
+function AgentDetail({ a, now, sessionId }: { a: AgentInfo; now: number; sessionId: string }) {
   const running = a.status === 'running' || a.status === 'starting';
+  const topTools = Object.entries(a.tools).sort((x, y) => y[1] - x[1]).slice(0, 8);
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
+    <div className="mx-auto max-w-5xl">
       <div className="flex items-center gap-2.5">
         {a.mainAgent ? <User size={16} className="text-zinc-400" /> : <Bot size={16} className="text-violet-400" />}
         <span className="min-w-0 flex-1 truncate text-sm font-semibold">
@@ -28,6 +33,7 @@ function AgentCard({ a, now, sessionId }: { a: AgentInfo; now: number; sessionId
       </div>
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
         {a.type && !a.mainAgent && <span>{a.type}</span>}
+        {!a.mainAgent && a.id && <span className="font-mono">{shortId(a.id)}</span>}
         {a.durationMs != null && <span>{fmtDur(a.durationMs)}</span>}
         {a.status !== 'done' && a.startedAt && <span>started {relTime(a.startedAt, now)}</span>}
         {a.lastTool && <span>last: {a.lastTool}</span>}
@@ -43,41 +49,68 @@ function AgentCard({ a, now, sessionId }: { a: AgentInfo; now: number; sessionId
         </div>
       )}
       {a.prompt && (
-        <details className="mt-2.5">
+        <details className="mt-3">
           <summary className="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">delegation prompt</summary>
           <pre className="mt-1.5 max-h-56 overflow-y-auto rounded-md bg-zinc-100 p-2.5 text-[11px] leading-relaxed whitespace-pre-wrap dark:bg-zinc-900">{a.prompt}</pre>
         </details>
       )}
       {a.lastMessage && (
-        <details className="mt-1.5" open={!a.mainAgent && a.status === 'done'}>
+        <details className="mt-2" open={!a.mainAgent && a.status === 'done'}>
           <summary className="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">final report</summary>
           <pre className="mt-1.5 max-h-56 overflow-y-auto rounded-md bg-zinc-100 p-2.5 text-[11px] leading-relaxed whitespace-pre-wrap dark:bg-zinc-900">{a.lastMessage}</pre>
         </details>
       )}
-      <details className="mt-1.5" onToggle={(e) => setShowTranscript((e.target as HTMLDetailsElement).open)}>
-        <summary className="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">
-          {running ? '● live transcript' : 'transcript'}
-        </summary>
-        {showTranscript && (
-          <AgentTranscript sessionId={sessionId} agentId={a.mainAgent ? null : a.id} running={running} />
-        )}
-      </details>
+      <div className="mt-3">
+        <div className="mb-1 text-xs font-medium text-zinc-500">{running ? '● live transcript' : 'transcript'}</div>
+        <AgentTranscript sessionId={sessionId} agentId={a.mainAgent ? null : a.id} running={running} />
+      </div>
     </div>
   );
 }
 
-export default function AgentsPanel({ session, now }: { session: SessionInfo; now: number }) {
-  const main = session.agents.filter((a) => a.mainAgent);
+export default function AgentsPanel({ session, now, sub }: { session: SessionInfo; now: number; sub: string | null }) {
+  const main = session.agents.find((a) => a.mainAgent);
   const delegates = session.agents.filter((a) => !a.mainAgent);
+  const ordered = main ? [main, ...delegates] : delegates;
+
+  const selected =
+    (sub && sub !== 'main' && ordered.find((a) => a.id === sub)) ||
+    (sub === 'main' || !sub ? main : null) ||
+    main ||
+    ordered[0] ||
+    null;
+
   return (
-    <div className="h-full overflow-y-auto p-4">
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-        {main.map((a, i) => <AgentCard key={a.id ?? i} a={a} now={now} sessionId={session.id} />)}
-        {delegates.map((a, i) => <AgentCard key={a.id ?? `d${i}`} a={a} now={now} sessionId={session.id} />)}
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex gap-1 overflow-x-auto border-b border-zinc-200 px-4 pt-2 dark:border-zinc-800">
+        {ordered.map((a, i) => {
+          const running = a.status === 'running' || a.status === 'starting';
+          const active = selected === a;
+          return (
+            <button
+              key={a.id ?? i}
+              onClick={() => navigate(session.id, 'agents', a.mainAgent ? 'main' : a.id)}
+              className={`flex shrink-0 items-center gap-1.5 rounded-t-lg border-b-2 px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors ${
+                active
+                  ? 'border-amber-500 text-zinc-900 dark:text-zinc-50'
+                  : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+              }`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${running ? 'bg-emerald-500 pulse-dot' : a.status === 'done' ? 'bg-zinc-300 dark:bg-zinc-600' : 'bg-sky-400'}`} />
+              {a.mainAgent ? <User size={12} /> : <Bot size={12} />}
+              {tabLabel(a)}
+            </button>
+          );
+        })}
+        {!delegates.length && (
+          <span className="self-center px-2 pb-1 text-[11px] text-zinc-400">no subagents spawned yet</span>
+        )}
       </div>
-      {!delegates.length && (
-        <p className="py-6 text-center text-xs text-zinc-400">No subagents spawned yet.</p>
-      )}
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        {selected ? <AgentDetail a={selected} now={now} sessionId={session.id} /> : (
+          <p className="py-8 text-center text-xs text-zinc-400">No agents yet.</p>
+        )}
+      </div>
     </div>
   );
 }

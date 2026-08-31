@@ -21,7 +21,7 @@ export default function App() {
 
   // Keep the URL canonical once data arrives (deep-linkable tabs).
   useEffect(() => {
-    if (session && route.sessionId !== session.id) navigate(session.id, route.tab);
+    if (session && route.sessionId !== session.id) navigate(session.id, route.tab, route.sub);
   }, [session, route.sessionId, route.tab]);
 
   return (
@@ -29,7 +29,7 @@ export default function App() {
       <Sidebar state={state} connected={connected} now={now} selectedId={session?.id ?? null} tab={route.tab} />
       <main className="flex min-w-0 flex-1 flex-col">
         {session ? (
-          <SessionView session={session} events={state?.events ?? []} tab={route.tab} now={now} />
+          <SessionView session={session} events={state?.events ?? []} tab={route.tab} sub={route.sub} now={now} />
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-zinc-400">
             <Eye size={40} strokeWidth={1.5} />

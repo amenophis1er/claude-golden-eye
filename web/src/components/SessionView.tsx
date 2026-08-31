@@ -28,8 +28,8 @@ function StatChip({ label, value, alert }: { label: string; value: number; alert
   );
 }
 
-export default function SessionView({ session: s, events, tab, now }: {
-  session: SessionInfo; events: HookEvent[]; tab: Tab; now: number;
+export default function SessionView({ session: s, events, tab, sub, now }: {
+  session: SessionInfo; events: HookEvent[]; tab: Tab; sub: string | null; now: number;
 }) {
   const sessionEvents = events.filter((e) => e.payload?.session_id === s.id);
   const working = s.state === 'working' || s.state === 'active';
@@ -118,7 +118,7 @@ export default function SessionView({ session: s, events, tab, now }: {
       {/* body */}
       <div className="min-h-0 flex-1 overflow-hidden">
         {tab === 'feed' && <LiveFeed session={s} events={sessionEvents} now={now} />}
-        {tab === 'agents' && <AgentsPanel session={s} now={now} />}
+        {tab === 'agents' && <AgentsPanel session={s} now={now} sub={sub} />}
         {tab === 'timeline' && <Timeline events={sessionEvents} />}
         {tab === 'plan' && <PlanBoard session={s} />}
       </div>
