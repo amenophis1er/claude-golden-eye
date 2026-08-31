@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  ArrowDownToLine, ArrowDownUp, Bot, CheckCircle2, Flag, GitFork, MessageSquare,
-  Play, Power, ShieldX, TerminalSquare, TrendingUp, User,
+  ArrowDownToLine, ArrowDownUp, Bot, CheckCircle2, Circle, CircleDot, Flag, GitFork,
+  ListTodo, MessageSquare, Play, Power, ShieldX, TerminalSquare, TrendingUp, User,
 } from 'lucide-react';
-import type { HookEvent, SessionInfo } from '../lib/types';
+import type { HookEvent, SessionInfo, Todo } from '../lib/types';
 import EventDetail from './EventDetail';
 import { clock, fmtDur, toolSummary, parseTaskNotification } from '../lib/format';
 
@@ -111,6 +111,44 @@ function LastPrompt({ text }: { text: string }) {
   );
 }
 
+function PlanRail({ todos }: { todos: Todo[] }) {
+  if (!todos.length) return null;
+  const done = todos.filter((t) => t.status === 'completed');
+  const active = todos.filter((t) => t.status === 'in_progress');
+  const open = todos.filter((t) => t.status !== 'completed' && t.status !== 'in_progress');
+  const row = (t: Todo, Icon: any, cls: string, extra?: string | null) => (
+    <div key={t.id ?? t.content} className="flex items-start gap-2 py-0.5">
+      <Icon size={13} className={`mt-0.5 shrink-0 ${cls}`} />
+      <div className="min-w-0 flex-1">
+        <div className={`truncate text-xs ${t.status === 'completed' ? 'text-zinc-400 line-through' : ''}`} title={t.description ?? t.content}>
+          {t.id && <span className="mr-1 text-[10px] text-zinc-400 tabular-nums">#{t.id}</span>}
+          {t.content}
+        </div>
+        {extra && <div className="truncate text-[11px] text-amber-600 italic dark:text-amber-400">{extra}…</div>}
+      </div>
+    </div>
+  );
+  return (
+    <section className="shrink-0 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+      <h3 className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-zinc-400 uppercase">
+        <ListTodo size={12} /> Plan · {done.length}/{todos.length} done
+      </h3>
+      <div className="max-h-64 overflow-y-auto">
+        {active.map((t) => row(t, CircleDot, 'text-amber-500', t.activeForm))}
+        {open.map((t) => row(t, Circle, 'text-zinc-300 dark:text-zinc-600'))}
+        {done.length > 0 && (
+          <details>
+            <summary className="cursor-pointer py-0.5 text-[11px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
+              {done.length} completed
+            </summary>
+            {done.map((t) => row(t, CheckCircle2, 'text-emerald-500'))}
+          </details>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function OutputPanel({ session }: { session: SessionInfo }) {
   return (
     <div className="flex w-[26rem] shrink-0 flex-col gap-3 overflow-y-auto border-l border-zinc-200 p-4 dark:border-zinc-800">
@@ -128,6 +166,7 @@ function OutputPanel({ session }: { session: SessionInfo }) {
           <p className="text-xs text-zinc-400">No turn result yet.</p>
         )}
       </section>
+      <PlanRail todos={session.todos} />
     </div>
   );
 }

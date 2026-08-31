@@ -1,17 +1,15 @@
-import { Activity, Bot, Crown, ListTodo, Radio, ScrollText, Target } from 'lucide-react';
+import { Activity, Bot, Crown, Radio, ScrollText, Target } from 'lucide-react';
 import type { HookEvent, SessionInfo } from '../lib/types';
 import { navigate, type Tab } from '../lib/router';
 import { baseName, relTime, shortId } from '../lib/format';
 import LiveFeed from './LiveFeed';
 import AgentsPanel from './AgentsPanel';
 import Timeline from './Timeline';
-import PlanBoard from './PlanBoard';
 
 const TABS: { id: Tab; label: string; icon: any }[] = [
   { id: 'feed', label: 'Live', icon: Radio },
   { id: 'agents', label: 'Agents', icon: Bot },
   { id: 'timeline', label: 'Timeline', icon: ScrollText },
-  { id: 'plan', label: 'Plan', icon: ListTodo },
 ];
 
 function StatChip({ label, value, alert }: { label: string; value: number; alert?: boolean }) {
@@ -143,9 +141,7 @@ export default function SessionView({ session: s, events, tab, sub, now }: {
                   {delegates.length}
                 </span>
               )}
-              {id === 'plan' && s.todos.length > 0 && (
-                <span className="rounded-full bg-zinc-200 px-1.5 text-[10px] tabular-nums dark:bg-zinc-800">{s.todos.length}</span>
-              )}
+
             </button>
           ))}
         </nav>
@@ -153,10 +149,9 @@ export default function SessionView({ session: s, events, tab, sub, now }: {
 
       {/* body */}
       <div className="min-h-0 flex-1 overflow-hidden">
-        {tab === 'feed' && <LiveFeed session={s} events={sessionEvents} now={now} />}
+        {(tab === 'feed' || tab === 'plan') && <LiveFeed session={s} events={sessionEvents} now={now} />}
         {tab === 'agents' && <AgentsPanel session={s} now={now} sub={sub} />}
         {tab === 'timeline' && <Timeline events={sessionEvents} />}
-        {tab === 'plan' && <PlanBoard session={s} />}
       </div>
     </div>
   );
