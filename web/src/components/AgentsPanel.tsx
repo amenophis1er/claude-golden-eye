@@ -1,4 +1,5 @@
-import { Bot, CheckCircle2, User } from 'lucide-react';
+import { useState } from 'react';
+import { Bot, CheckCircle2, ChevronDown, User } from 'lucide-react';
 import type { AgentInfo, SessionInfo } from '../lib/types';
 import { fmtDur, relTime, shortId } from '../lib/format';
 import { navigate } from '../lib/router';
@@ -93,14 +94,17 @@ function AgentDetail({ a, now, sessionId }: { a: AgentInfo; now: number; session
 
 export default function AgentsPanel({ session, now, sub }: { session: SessionInfo; now: number; sub: string | null }) {
   const main = session.agents.find((a) => a.mainAgent);
-  // Active delegates sit next to Main (newest start first); finished ones
-  // age rightward (most recently finished first).
   const isLive = (a: AgentInfo) => a.status === 'running' || a.status === 'starting';
   const sortTs = (a: AgentInfo) => Date.parse((isLive(a) ? a.startedAt : a.endedAt || a.startedAt) || '') || 0;
   const delegates = session.agents
     .filter((a) => !a.mainAgent)
     .sort((x, y) => Number(isLive(y)) - Number(isLive(x)) || sortTs(y) - sortTs(x));
+  const liveDelegates = delegates.filter(isLive);
+  // Finished delegates collapse into one dropdown so the bar only ever
+  // holds Main + live agents.
+  const doneDelegates = delegates.filter((a) => !isLive(a));
   const ordered = main ? [main, ...delegates] : delegates;
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const selected =
     (sub && sub !== 'main' && ordered.find((a) => a.id === sub)) ||
@@ -108,33 +112,58 @@ export default function AgentsPanel({ session, now, sub }: { session: SessionInf
     main ||
     ordered[0] ||
     null;
+  const selectedIsDone = !!selected && !selected.mainAgent && !isLive(selected);
+
+  const tabCls = (active: boolean) =>
+    `flex shrink-0 items-center gap-1.5 rounded-t-lg border-b-2 px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors ${
+      active
+        ? 'border-amber-500 text-zinc-900 dark:text-zinc-50'
+        : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+    }`;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex gap-1 overflow-x-auto border-b border-zinc-200 px-4 pt-2 dark:border-zinc-800">
-        {ordered.map((a, i) => {
-          const running = a.status === 'running' || a.status === 'starting';
-          const active = selected === a;
-          return (
-            <button
-              key={a.id ?? i}
-              onClick={() => navigate(session.id, 'agents', a.mainAgent ? 'main' : a.id)}
-              className={`flex shrink-0 items-center gap-1.5 rounded-t-lg border-b-2 px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors ${
-                active
-                  ? 'border-amber-500 text-zinc-900 dark:text-zinc-50'
-                  : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
-              }`}
-            >
-              {a.status === 'done' ? (
-                <CheckCircle2 size={13} className="shrink-0 text-emerald-500" />
-              ) : (
-                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${running ? 'bg-emerald-500 pulse-dot' : 'bg-sky-400'}`} />
-              )}
-              {a.mainAgent ? <User size={12} /> : <Bot size={12} />}
-              {tabLabel(a)}
+        {(main ? [main, ...liveDelegates] : liveDelegates).map((a, i) => (
+          <button
+            key={a.id ?? i}
+            onClick={() => navigate(session.id, 'agents', a.mainAgent ? 'main' : a.id)}
+            className={tabCls(selected === a)}
+          >
+            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${isLive(a) ? 'bg-emerald-500 pulse-dot' : 'bg-zinc-300 dark:bg-zinc-600'}`} />
+            {a.mainAgent ? <User size={12} /> : <Bot size={12} />}
+            {tabLabel(a)}
+          </button>
+        ))}
+        {doneDelegates.length > 0 && (
+          <div className="relative shrink-0">
+            <button onClick={() => setMenuOpen((o) => !o)} className={tabCls(selectedIsDone)}>
+              <CheckCircle2 size={13} className="shrink-0 text-emerald-500" />
+              {selectedIsDone && selected ? tabLabel(selected) : `Done (${doneDelegates.length})`}
+              <ChevronDown size={12} className={`transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
             </button>
-          );
-        })}
+            {menuOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+                <div className="absolute left-0 z-20 mt-1 max-h-80 w-72 overflow-y-auto rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                  {doneDelegates.map((a, i) => (
+                    <button
+                      key={a.id ?? i}
+                      onClick={() => { setMenuOpen(false); if (a.id) navigate(session.id, 'agents', a.id); }}
+                      className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 ${
+                        selected === a ? 'font-semibold' : ''
+                      }`}
+                    >
+                      <CheckCircle2 size={12} className="shrink-0 text-emerald-500" />
+                      <span className="min-w-0 flex-1 truncate">{a.description ?? a.type ?? shortId(a.id)}</span>
+                      {a.durationMs != null && <span className="shrink-0 text-[10px] text-zinc-400 tabular-nums">{fmtDur(a.durationMs)}</span>}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
         {!delegates.length && (
           <span className="self-center px-2 pb-1 text-[11px] text-zinc-400">no subagents spawned yet</span>
         )}
