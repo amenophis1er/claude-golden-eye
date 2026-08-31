@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Brain, MessageSquare, TerminalSquare, CornerDownRight } from 'lucide-react';
+import { ArrowDownUp, Brain, MessageSquare, TerminalSquare, CornerDownRight } from 'lucide-react';
 import { clock } from '../lib/format';
 
 interface TEntry {
@@ -21,6 +21,7 @@ export default function AgentTranscript({ sessionId, agentId, running, fill = fa
   const [entries, setEntries] = useState<TEntry[] | null>(null);
   const [model, setModel] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [newestFirst, setNewestFirst] = useState(() => localStorage.getItem('ge-transcript-order') === 'newest');
   const scroller = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
 
@@ -52,12 +53,29 @@ export default function AgentTranscript({ sessionId, agentId, running, fill = fa
 
   useEffect(() => {
     const el = scroller.current;
-    if (el && pinned.current) el.scrollTop = el.scrollHeight;
-  }, [entries]);
+    if (el && pinned.current && !newestFirst) el.scrollTop = el.scrollHeight;
+  }, [entries, newestFirst]);
 
-  const modelBadge = model && (
-    <div className="mb-1 text-[11px] text-zinc-400">
-      running on <span className="rounded bg-violet-100 px-1.5 py-px font-mono text-violet-700 dark:bg-violet-400/10 dark:text-violet-300">{model}</span>
+  const toggleOrder = () => {
+    const next = !newestFirst;
+    setNewestFirst(next);
+    localStorage.setItem('ge-transcript-order', next ? 'newest' : 'oldest');
+    if (scroller.current) scroller.current.scrollTop = next ? 0 : scroller.current.scrollHeight;
+  };
+
+  const headerRow = (
+    <div className="mb-1 flex items-center justify-between gap-2">
+      <span className="text-[11px] text-zinc-400">
+        {model && (
+          <>running on <span className="rounded bg-violet-100 px-1.5 py-px font-mono text-violet-700 dark:bg-violet-400/10 dark:text-violet-300">{model}</span></>
+        )}
+      </span>
+      <button
+        onClick={toggleOrder}
+        className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+      >
+        <ArrowDownUp size={11} /> {newestFirst ? 'newest first' : 'oldest first'}
+      </button>
     </div>
   );
 
@@ -65,9 +83,11 @@ export default function AgentTranscript({ sessionId, agentId, running, fill = fa
   if (!entries) return <p className="mt-1.5 text-[11px] text-zinc-400">loading…</p>;
   if (!entries.length) return <p className="mt-1.5 text-[11px] text-zinc-400">transcript is empty so far</p>;
 
+  const shown = newestFirst ? [...entries].reverse() : entries;
+
   return (
     <div className={fill ? 'flex min-h-0 flex-1 flex-col' : ''}>
-    {modelBadge}
+    {headerRow}
     <div
       ref={scroller}
       onScroll={() => {
@@ -76,7 +96,7 @@ export default function AgentTranscript({ sessionId, agentId, running, fill = fa
       }}
       className={`mt-1.5 overflow-y-auto rounded-md border border-zinc-200 bg-white p-2 dark:border-zinc-800 dark:bg-zinc-950/60 ${fill ? 'min-h-0 flex-1' : 'max-h-96'}`}
     >
-      {entries.map((en, i) => {
+      {shown.map((en, i) => {
         if (en.kind === 'thinking')
           return (
             <details key={i} className="my-1 rounded px-1.5 py-0.5">

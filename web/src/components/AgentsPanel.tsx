@@ -21,53 +21,66 @@ function tabLabel(a: AgentInfo) {
 
 function AgentDetail({ a, now, sessionId }: { a: AgentInfo; now: number; sessionId: string }) {
   const running = a.status === 'running' || a.status === 'starting';
-  const topTools = Object.entries(a.tools).sort((x, y) => y[1] - x[1]).slice(0, 8);
+  const topTools = Object.entries(a.tools).sort((x, y) => y[1] - x[1]);
   const elapsed = running && a.startedAt ? fmtDur(now - Date.parse(a.startedAt)) : null;
+  const meta: [string, string][] = [];
+  if (!a.mainAgent && a.type) meta.push(['type', a.type]);
+  if (!a.mainAgent && a.id) meta.push(['id', shortId(a.id)]);
+  if (a.model) meta.push(['requested model', a.model]);
+  if (a.startedAt) meta.push(['started', relTime(a.startedAt, now)]);
+  if (a.durationMs != null) meta.push(['duration', fmtDur(a.durationMs)]);
+  if (a.lastTool) meta.push(['last tool', a.lastTool]);
+  meta.push(['tool events', String(a.toolEvents)]);
+
   return (
-    <div className="mx-auto flex h-full max-w-5xl flex-col">
-      <div className="flex items-center gap-2.5">
-        {a.mainAgent ? <User size={16} className="text-zinc-400" /> : <Bot size={16} className="text-violet-400" />}
-        <span className="min-w-0 flex-1 truncate text-sm font-semibold">
-          {a.mainAgent ? 'Main session' : (a.description ?? a.type ?? 'delegate')}
-        </span>
-        {elapsed && <span className="text-xs text-zinc-400 tabular-nums">⏱ {elapsed}</span>}
-        <StatusPill status={a.status} />
-      </div>
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
-        {a.type && !a.mainAgent && <span>{a.type}</span>}
-        {!a.mainAgent && a.id && <span className="font-mono">{shortId(a.id)}</span>}
-        {a.model && (
-          <span className="rounded bg-violet-100 px-1.5 font-mono text-[11px] text-violet-700 dark:bg-violet-400/10 dark:text-violet-300">
-            {a.model}
+    <div className="flex h-full min-h-0 gap-5">
+      {/* left: properties */}
+      <div className="w-80 shrink-0 overflow-y-auto pr-1">
+        <div className="flex items-center gap-2.5">
+          {a.mainAgent ? <User size={16} className="text-zinc-400" /> : <Bot size={16} className="text-violet-400" />}
+          <span className="min-w-0 flex-1 text-sm font-semibold">
+            {a.mainAgent ? 'Main session' : (a.description ?? a.type ?? 'delegate')}
           </span>
-        )}
-        {a.durationMs != null && <span>{fmtDur(a.durationMs)}</span>}
-        {a.status !== 'done' && a.startedAt && <span>started {relTime(a.startedAt, now)}</span>}
-        {a.lastTool && <span>last: {a.lastTool}</span>}
-        <span>{a.toolEvents} tool event(s)</span>
-      </div>
-      {topTools.length > 0 && (
-        <div className="mt-2.5 flex flex-wrap gap-1.5">
-          {topTools.map(([tool, n]) => (
-            <span key={tool} className="rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-              {tool} <span className="font-semibold tabular-nums">{n}</span>
-            </span>
-          ))}
         </div>
-      )}
-      {a.prompt && (
-        <details className="mt-3">
-          <summary className="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">delegation prompt</summary>
-          <pre className="mt-1.5 max-h-56 overflow-y-auto rounded-md bg-zinc-100 p-2.5 text-[11px] leading-relaxed whitespace-pre-wrap dark:bg-zinc-900">{a.prompt}</pre>
-        </details>
-      )}
-      {a.lastMessage && (
-        <details className="mt-2" open={!a.mainAgent && a.status === 'done'}>
-          <summary className="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">final report</summary>
-          <pre className="mt-1.5 max-h-56 overflow-y-auto rounded-md bg-zinc-100 p-2.5 text-[11px] leading-relaxed whitespace-pre-wrap dark:bg-zinc-900">{a.lastMessage}</pre>
-        </details>
-      )}
-      <div className="mt-3 flex min-h-0 flex-1 flex-col">
+        <div className="mt-2 flex items-center gap-2">
+          <StatusPill status={a.status} />
+          {elapsed && <span className="text-xs text-zinc-400 tabular-nums">⏱ {elapsed}</span>}
+        </div>
+        <dl className="mt-3 space-y-1">
+          {meta.map(([k, v]) => (
+            <div key={k} className="flex justify-between gap-3 text-xs">
+              <dt className="text-zinc-400">{k}</dt>
+              <dd className={`text-right ${k.includes('model') ? 'rounded bg-violet-100 px-1.5 font-mono text-violet-700 dark:bg-violet-400/10 dark:text-violet-300' : 'text-zinc-600 dark:text-zinc-300'}`}>{v}</dd>
+            </div>
+          ))}
+        </dl>
+        {topTools.length > 0 && (
+          <div className="mt-3">
+            <div className="mb-1 text-[11px] font-semibold tracking-wider text-zinc-400 uppercase">tools</div>
+            <div className="flex flex-wrap gap-1.5">
+              {topTools.map(([tool, n]) => (
+                <span key={tool} className="rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                  {tool} <span className="font-semibold tabular-nums">{n}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+        {a.prompt && (
+          <details className="mt-3" open={!a.mainAgent}>
+            <summary className="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">delegation prompt</summary>
+            <pre className="mt-1.5 max-h-72 overflow-y-auto rounded-md bg-zinc-100 p-2.5 text-[11px] leading-relaxed whitespace-pre-wrap dark:bg-zinc-900">{a.prompt}</pre>
+          </details>
+        )}
+        {a.lastMessage && (
+          <details className="mt-2" open={!a.mainAgent && a.status === 'done'}>
+            <summary className="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">final report</summary>
+            <pre className="mt-1.5 max-h-72 overflow-y-auto rounded-md bg-zinc-100 p-2.5 text-[11px] leading-relaxed whitespace-pre-wrap dark:bg-zinc-900">{a.lastMessage}</pre>
+          </details>
+        )}
+      </div>
+      {/* right: transcript */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col border-l border-zinc-200 pl-5 dark:border-zinc-800">
         <div className="mb-1 flex items-center gap-2 text-xs font-medium text-zinc-500">
           {running && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 pulse-dot" />}
           {running ? 'live transcript' : 'transcript'}
