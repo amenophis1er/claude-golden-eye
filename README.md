@@ -165,6 +165,20 @@ zero-dependency server — end users need no build step.
 - UI development: `cd web && npm install && npm run dev` (Vite proxies `/api` + `/pm`
   to `127.0.0.1:7717`). Ship with `npm run build` and commit `web/dist/`.
 
+## Remote access (Tailscale)
+
+The server binds 127.0.0.1 only. To reach it from other devices, proxy it onto
+your tailnet (tailnet-only, HTTPS, survives reboots):
+
+```bash
+tailscale serve --bg http://127.0.0.1:7717
+# undo: tailscale serve reset
+```
+
+Caveats: the dashboard has no auth of its own — anyone on the tailnet can view
+sessions and hit /pm & /api/prune. And the proxy targets :7717 specifically; if
+a port squatter ever pushes the server to a fallback port, re-point the proxy.
+
 ## Development
 
 - `node --test` — reducer tests for `server/state.js` (agent FIFO binding + repair,
