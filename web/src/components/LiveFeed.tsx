@@ -151,8 +151,42 @@ function PlanRail({ todos }: { todos: Todo[] }) {
 }
 
 function OutputPanel({ session }: { session: SessionInfo }) {
+  const [width, setWidth] = useState(() => {
+    const w = Number(localStorage.getItem('ge-rail-width'));
+    return w >= 280 && w <= 900 ? w : 416;
+  });
+  const widthRef = useRef(width);
+
+  const startDrag = (e: React.PointerEvent) => {
+    e.preventDefault();
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+    const onMove = (ev: PointerEvent) => {
+      const w = Math.min(900, Math.max(280, window.innerWidth - ev.clientX));
+      widthRef.current = w;
+      setWidth(w);
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      localStorage.setItem('ge-rail-width', String(widthRef.current));
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp, { once: true });
+  };
+
   return (
-    <div className="flex w-[26rem] shrink-0 flex-col gap-3 overflow-y-auto border-l border-zinc-200 p-4 dark:border-zinc-800">
+    <div
+      className="relative flex shrink-0 flex-col gap-3 overflow-y-auto border-l border-zinc-200 p-4 dark:border-zinc-800"
+      style={{ width }}
+    >
+      {/* drag handle over the left border */}
+      <div
+        onPointerDown={startDrag}
+        title="Drag to resize"
+        className="absolute top-0 left-0 z-10 h-full w-1.5 -translate-x-1/2 cursor-col-resize transition-colors hover:bg-amber-400/50 active:bg-amber-500/60"
+      />
       {session.lastPrompt && (
         <section>
           <h3 className="mb-1.5 text-[11px] font-semibold tracking-wider text-zinc-400 uppercase">Last prompt</h3>
