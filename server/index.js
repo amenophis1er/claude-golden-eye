@@ -325,6 +325,17 @@ const server = http.createServer(async (req, res) => {
       // The transcript lives at <config-root>/projects/<proj>/<sid>.jsonl —
       // derive the root so --resume looks in the right store.
       const env = { ...process.env };
+      // Under launchd, PATH is minimal — but the resumed turn's HOOKS run
+      // `node ...` via /bin/sh and die with "node: command not found",
+      // which silently starves the dashboard of that turn's events.
+      // Guarantee node + claude directories are on PATH.
+      env.PATH = [
+        ...new Set(
+          [path.dirname(process.execPath), path.dirname(bin), '/opt/homebrew/bin', '/usr/local/bin']
+            .concat((env.PATH || '').split(':'))
+            .filter(Boolean)
+        ),
+      ].join(':');
       if (sess.transcriptPath) {
         const root = path.dirname(path.dirname(path.dirname(sess.transcriptPath)));
         if (path.basename(root).startsWith('.claude')) env.CLAUDE_CONFIG_DIR = root;
