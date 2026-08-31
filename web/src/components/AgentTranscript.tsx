@@ -15,8 +15,8 @@ interface TEntry {
  * Live tail of an agent's own JSONL transcript — thinking, assistant text,
  * tool calls and results. Polls while the agent is running.
  */
-export default function AgentTranscript({ sessionId, agentId, running }: {
-  sessionId: string; agentId?: string | null; running: boolean;
+export default function AgentTranscript({ sessionId, agentId, running, fill = false }: {
+  sessionId: string; agentId?: string | null; running: boolean; fill?: boolean;
 }) {
   const [entries, setEntries] = useState<TEntry[] | null>(null);
   const [model, setModel] = useState<string | null>(null);
@@ -66,7 +66,7 @@ export default function AgentTranscript({ sessionId, agentId, running }: {
   if (!entries.length) return <p className="mt-1.5 text-[11px] text-zinc-400">transcript is empty so far</p>;
 
   return (
-    <div>
+    <div className={fill ? 'flex min-h-0 flex-1 flex-col' : ''}>
     {modelBadge}
     <div
       ref={scroller}
@@ -74,7 +74,7 @@ export default function AgentTranscript({ sessionId, agentId, running }: {
         const el = scroller.current;
         if (el) pinned.current = el.scrollTop + el.clientHeight >= el.scrollHeight - 40;
       }}
-      className="mt-1.5 max-h-96 overflow-y-auto rounded-md border border-zinc-200 bg-white p-2 dark:border-zinc-800 dark:bg-zinc-950/60"
+      className={`mt-1.5 overflow-y-auto rounded-md border border-zinc-200 bg-white p-2 dark:border-zinc-800 dark:bg-zinc-950/60 ${fill ? 'min-h-0 flex-1' : 'max-h-96'}`}
     >
       {entries.map((en, i) => {
         if (en.kind === 'thinking')
@@ -88,9 +88,10 @@ export default function AgentTranscript({ sessionId, agentId, running }: {
           );
         if (en.kind === 'text')
           return (
-            <div key={i} className="my-1.5 flex gap-1.5 px-1.5">
+            <div key={i} className="my-2 flex gap-1.5 rounded-md bg-sky-50/60 px-1.5 py-1 dark:bg-sky-950/20">
               <MessageSquare size={11} className="mt-0.5 shrink-0 text-sky-500" />
-              <p className="min-w-0 text-xs leading-relaxed whitespace-pre-wrap">{en.text}</p>
+              <p className="min-w-0 flex-1 text-xs leading-relaxed whitespace-pre-wrap">{en.text}</p>
+              {en.ts && <span className="shrink-0 text-[10px] text-zinc-400 tabular-nums">{clock(en.ts)}</span>}
             </div>
           );
         if (en.kind === 'tool') {
@@ -104,11 +105,24 @@ export default function AgentTranscript({ sessionId, agentId, running }: {
             </div>
           );
         }
+        const full = en.text ?? '';
+        const firstLine = full.split('\n')[0];
+        const expandable = full.length > firstLine.length || firstLine.length > 140;
+        if (!expandable)
+          return (
+            <div key={i} className="my-0.5 ml-4 flex gap-1.5 px-1.5">
+              <CornerDownRight size={11} className={`mt-0.5 shrink-0 ${en.isError ? 'text-red-400' : 'text-zinc-300 dark:text-zinc-600'}`} />
+              <pre className={`min-w-0 flex-1 truncate font-mono text-[10px] ${en.isError ? 'text-red-500' : 'text-zinc-400'}`}>{firstLine}</pre>
+            </div>
+          );
         return (
-          <div key={i} className="my-0.5 flex gap-1.5 px-1.5">
-            <CornerDownRight size={11} className={`mt-0.5 shrink-0 ${en.isError ? 'text-red-400' : 'text-zinc-300 dark:text-zinc-600'}`} />
-            <pre className={`min-w-0 flex-1 truncate font-mono text-[10px] ${en.isError ? 'text-red-500' : 'text-zinc-400'}`}>{(en.text ?? '').split('\n')[0]}</pre>
-          </div>
+          <details key={i} className="my-0.5 ml-4 px-1.5">
+            <summary className="flex cursor-pointer list-none gap-1.5 [&::-webkit-details-marker]:hidden">
+              <CornerDownRight size={11} className={`mt-0.5 shrink-0 ${en.isError ? 'text-red-400' : 'text-zinc-300 dark:text-zinc-600'}`} />
+              <pre className={`min-w-0 flex-1 truncate font-mono text-[10px] ${en.isError ? 'text-red-500' : 'text-zinc-400'}`}>{firstLine} …</pre>
+            </summary>
+            <pre className={`mt-1 ml-4 max-h-48 overflow-auto rounded bg-zinc-100 p-2 font-mono text-[10px] leading-relaxed whitespace-pre-wrap dark:bg-zinc-900 ${en.isError ? 'text-red-500' : 'text-zinc-500'}`}>{full}</pre>
+          </details>
         );
       })}
     </div>

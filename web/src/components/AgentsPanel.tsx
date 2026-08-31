@@ -22,13 +22,15 @@ function tabLabel(a: AgentInfo) {
 function AgentDetail({ a, now, sessionId }: { a: AgentInfo; now: number; sessionId: string }) {
   const running = a.status === 'running' || a.status === 'starting';
   const topTools = Object.entries(a.tools).sort((x, y) => y[1] - x[1]).slice(0, 8);
+  const elapsed = running && a.startedAt ? fmtDur(now - Date.parse(a.startedAt)) : null;
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="mx-auto flex h-full max-w-5xl flex-col">
       <div className="flex items-center gap-2.5">
         {a.mainAgent ? <User size={16} className="text-zinc-400" /> : <Bot size={16} className="text-violet-400" />}
         <span className="min-w-0 flex-1 truncate text-sm font-semibold">
           {a.mainAgent ? 'Main session' : (a.description ?? a.type ?? 'delegate')}
         </span>
+        {elapsed && <span className="text-xs text-zinc-400 tabular-nums">⏱ {elapsed}</span>}
         <StatusPill status={a.status} />
       </div>
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
@@ -65,9 +67,12 @@ function AgentDetail({ a, now, sessionId }: { a: AgentInfo; now: number; session
           <pre className="mt-1.5 max-h-56 overflow-y-auto rounded-md bg-zinc-100 p-2.5 text-[11px] leading-relaxed whitespace-pre-wrap dark:bg-zinc-900">{a.lastMessage}</pre>
         </details>
       )}
-      <div className="mt-3">
-        <div className="mb-1 text-xs font-medium text-zinc-500">{running ? '● live transcript' : 'transcript'}</div>
-        <AgentTranscript sessionId={sessionId} agentId={a.mainAgent ? null : a.id} running={running} />
+      <div className="mt-3 flex min-h-0 flex-1 flex-col">
+        <div className="mb-1 flex items-center gap-2 text-xs font-medium text-zinc-500">
+          {running && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 pulse-dot" />}
+          {running ? 'live transcript' : 'transcript'}
+        </div>
+        <AgentTranscript sessionId={sessionId} agentId={a.mainAgent ? null : a.id} running={running} fill />
       </div>
     </div>
   );
@@ -111,7 +116,7 @@ export default function AgentsPanel({ session, now, sub }: { session: SessionInf
           <span className="self-center px-2 pb-1 text-[11px] text-zinc-400">no subagents spawned yet</span>
         )}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      <div className="min-h-0 flex-1 p-4">
         {selected ? <AgentDetail a={selected} now={now} sessionId={session.id} /> : (
           <p className="py-8 text-center text-xs text-zinc-400">No agents yet.</p>
         )}

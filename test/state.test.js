@@ -245,3 +245,10 @@ test('spawn records the requested model, PostToolUse input (post-pin) wins', () 
   });
   assert.equal(session(store).agents['agent:M1'].model, 'opus');
 });
+
+test('first tagged tool event flips a FIFO-bound agent from starting to running', () => {
+  const store = freshStore();
+  add(store, 'PreToolUse', { tool_name: 'Agent', tool_use_id: 't_r', tool_input: { description: 'd', prompt: 'p' } });
+  add(store, 'PreToolUse', { tool_name: 'Read', tool_input: { file_path: '/x' }, agent_id: 'R1' });
+  assert.equal(session(store).agents['agent:R1'].status, 'running');
+});
