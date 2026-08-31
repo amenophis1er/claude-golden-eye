@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import type { HookEvent, SessionInfo, Todo } from '../lib/types';
 import EventDetail from './EventDetail';
+import Markdown from './Markdown';
 import { clock, fmtDur, toolSummary, parseTaskNotification } from '../lib/format';
 
 interface Entry {
@@ -161,7 +162,9 @@ function OutputPanel({ session }: { session: SessionInfo }) {
       <section className="flex min-h-0 flex-1 flex-col">
         <h3 className="mb-1.5 text-[11px] font-semibold tracking-wider text-zinc-400 uppercase">Latest output (main)</h3>
         {session.lastResult ? (
-          <pre className="flex-1 overflow-y-auto rounded-lg bg-zinc-100 p-3 text-xs leading-relaxed whitespace-pre-wrap dark:bg-zinc-900">{session.lastResult}</pre>
+          <div className="flex-1 overflow-y-auto rounded-lg bg-zinc-100 p-3 dark:bg-zinc-900">
+            <Markdown text={session.lastResult} />
+          </div>
         ) : (
           <p className="text-xs text-zinc-400">No turn result yet.</p>
         )}
