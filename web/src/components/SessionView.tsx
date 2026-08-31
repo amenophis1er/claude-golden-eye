@@ -80,6 +80,15 @@ export default function SessionView({ session: s, events, tab, sub, now }: {
           {s.env?.branch && (
             <span className="inline-flex items-center gap-1"><GitBranch size={11} /> {s.env.branch}</span>
           )}
+          {s.permissionMode && (
+            <span className={`rounded px-1.5 text-[11px] font-medium ${
+              s.permissionMode === 'bypassPermissions' || s.permissionMode === 'auto'
+                ? 'bg-amber-100 text-amber-700 dark:bg-amber-400/10 dark:text-amber-300'
+                : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'
+            }`}>
+              {s.permissionMode} mode
+            </span>
+          )}
           {s.env?.model && (
             <span className="rounded bg-violet-100 px-1.5 font-mono text-[11px] text-violet-700 dark:bg-violet-400/10 dark:text-violet-300">{s.env.model}</span>
           )}

@@ -203,6 +203,9 @@ class Store {
     }
     const s = this.getOrCreateSession(p, e.__ts);
     s.lastActivity = e.__ts;
+    // Mode can be cycled mid-session (shift+tab) — track the latest.
+    if (p.permission_mode) s.permissionMode = p.permission_mode;
+    if (!s.transcriptPath && p.transcript_path) s.transcriptPath = p.transcript_path;
 
     switch (e.__hook) {
       case 'SessionStart': {
