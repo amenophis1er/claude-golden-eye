@@ -34,9 +34,9 @@ function AgentDetail({ a, now, sessionId }: { a: AgentInfo; now: number; session
   meta.push(['tool events', String(a.toolEvents)]);
 
   return (
-    <div className="flex h-full min-h-0 gap-5">
-      {/* left: properties */}
-      <div className="w-80 shrink-0 overflow-y-auto pr-1">
+    <div className="flex h-full min-h-0 flex-col gap-4 lg:flex-row lg:gap-5">
+      {/* left: properties (stacks on top for narrow windows) */}
+      <div className="max-h-72 shrink-0 overflow-y-auto pr-1 lg:max-h-none lg:w-80">
         <div className="flex items-center gap-2.5">
           {a.mainAgent ? <User size={16} className="text-zinc-400" /> : <Bot size={16} className="text-violet-400" />}
           <span className="min-w-0 flex-1 text-sm font-semibold">
@@ -81,7 +81,7 @@ function AgentDetail({ a, now, sessionId }: { a: AgentInfo; now: number; session
         )}
       </div>
       {/* right: transcript */}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col border-l border-zinc-200 pl-5 dark:border-zinc-800">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col border-zinc-200 lg:border-l lg:pl-5 dark:border-zinc-800">
         <div className="mb-1 flex items-center gap-2 text-xs font-medium text-zinc-500">
           {running && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 pulse-dot" />}
           {running ? 'live transcript' : 'transcript'}
