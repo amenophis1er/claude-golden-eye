@@ -36,16 +36,14 @@ function AgentDetail({ a, now, sessionId }: { a: AgentInfo; now: number; session
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 lg:flex-row lg:gap-5">
       {/* left: properties (stacks on top for narrow windows) */}
-      <div className="max-h-72 shrink-0 overflow-y-auto pr-1 lg:max-h-none lg:w-80">
+      <div className="max-h-[45vh] shrink-0 overflow-y-auto pr-1 lg:max-h-none lg:w-80">
         <div className="flex items-center gap-2.5">
-          {a.mainAgent ? <User size={16} className="text-zinc-400" /> : <Bot size={16} className="text-violet-400" />}
+          {a.mainAgent ? <User size={16} className="shrink-0 text-zinc-400" /> : <Bot size={16} className="shrink-0 text-violet-400" />}
           <span className="min-w-0 flex-1 text-sm font-semibold">
             {a.mainAgent ? 'Main session' : (a.description ?? a.type ?? 'delegate')}
           </span>
-        </div>
-        <div className="mt-2 flex items-center gap-2">
+          {elapsed && <span className="shrink-0 text-xs text-zinc-400 tabular-nums">⏱ {elapsed}</span>}
           <StatusPill status={a.status} />
-          {elapsed && <span className="text-xs text-zinc-400 tabular-nums">⏱ {elapsed}</span>}
         </div>
         <dl className="mt-3 space-y-1">
           {meta.map(([k, v]) => (
