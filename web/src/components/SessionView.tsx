@@ -190,7 +190,7 @@ export default function SessionView({ session: s, events, tab, sub, now }: {
         {tab === 'agents' && <AgentsPanel session={s} now={now} sub={sub} />}
         {tab === 'timeline' && <Timeline events={sessionEvents} />}
       </div>
-      {s.state !== 'ended' && <Composer session={s} />}
+      <Composer session={s} />
     </div>
   );
 }

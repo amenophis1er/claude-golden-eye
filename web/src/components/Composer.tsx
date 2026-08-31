@@ -77,7 +77,9 @@ export default function Composer({ session }: { session: SessionInfo }) {
           placeholder={
             working
               ? 'session is working — wait for the turn to finish'
-              : `Continue this session… (Enter to send, Shift+Enter for newline)`
+              : session.state === 'ended'
+                ? 'Session ended — sending resumes it… (Enter to send)'
+                : `Continue this session… (Enter to send, Shift+Enter for newline)`
           }
           disabled={working}
           className="min-h-9 flex-1 resize-none rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm outline-none placeholder:text-zinc-400 focus:border-amber-500 disabled:opacity-50 dark:border-zinc-700"
