@@ -45,7 +45,7 @@ function AgentDetail({ a, now, sessionId }: { a: AgentInfo; now: number; session
           {elapsed && <span className="shrink-0 text-xs text-zinc-400 tabular-nums">⏱ {elapsed}</span>}
           <StatusPill status={a.status} />
         </div>
-        <dl className="mt-3 space-y-1">
+        <dl className="mt-3 space-y-1 border-y border-zinc-200 py-3 dark:border-zinc-800">
           {meta.map(([k, v]) => (
             <div key={k} className="flex justify-between gap-3 text-xs">
               <dt className="text-zinc-400">{k}</dt>
