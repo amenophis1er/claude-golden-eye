@@ -41,6 +41,8 @@ function toEntry(e: HookEvent): Entry | null {
         label: `progress · ${p.state}${p.progress_pct != null ? ` ${p.progress_pct}%` : ''}`,
         summary: p.note ?? '', raw: p, ts: e.__ts, emphasis: p.state === 'blocked',
       };
+    case 'PMModelPin':
+      return { icon: Bot, tone: 'text-violet-500', label: `model pinned → ${p.model}`, summary: p.description ?? (p.was ? `was ${p.was}` : ''), raw: p, ts: e.__ts };
     case 'PMSync':
       return { icon: Flag, tone: 'text-amber-500', label: `PM mode ${p.action}`, summary: p.mission ?? '', raw: p, ts: e.__ts };
     case 'Stop':

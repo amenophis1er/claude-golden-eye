@@ -200,6 +200,7 @@ const server = http.createServer(async (req, res) => {
           session_id: body.sessionId,
           action: body.action === 'off' ? 'off' : 'on',
           mission: body.mission ?? null,
+          sub_model: body.subModel ?? null,
         },
       });
       if (ev) broadcast(ev);
@@ -273,10 +274,11 @@ function removeServerFile() {
 // PM discipline view for a session — what the enforcing hooks consume.
 function pmView(sessionId) {
   const s = sessionId ? store.sessions.get(sessionId) : null;
-  if (!s) return { pmMode: false, mission: null, denies: 0, agents: [], known: false };
+  if (!s) return { pmMode: false, mission: null, subModel: null, denies: 0, agents: [], known: false };
   return {
     pmMode: !!s.pmMode,
     mission: s.mission || null,
+    subModel: s.subModel || null,
     denies: s.stats.denies || 0,
     known: true,
     agents: Object.values(s.agents).map((a) => ({

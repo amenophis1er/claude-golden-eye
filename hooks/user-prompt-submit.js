@@ -59,12 +59,20 @@ async function main() {
         return inject('🟡 golden-eye: PM mode OFF. You are back to normal execution.');
       }
       // "on", "<mission>", "on — <mission>" all engage.
-      const mission = pmArgs
+      // Optional subagent model pin: "--sub <model>" / "sub-model: <model>"
+      // anywhere in the args (e.g. "/pm on --sub opus MISSION: ship it").
+      let subModel = null;
+      const argsSansSub = pmArgs.replace(
+        /(?:--sub(?:-model)?[\s=:]+|sub[-_]?model\s*[:=]\s*)([\w.-]+)\s*/i,
+        (_, m) => { subModel = m.toLowerCase(); return ''; }
+      );
+      const mission = argsSansSub
         .replace(/^on\b/, '')
         .replace(/^[-–—:,.]?\s*/, '')
         .trim();
-      const st = await pm.setPm({ sessionId: sid, action: 'on', mission });
-      const state = st && st.pmMode ? st : { pmMode: true, mission, agents: [], denies: 0 };
+      const st = await pm.setPm({ sessionId: sid, action: 'on', mission, subModel });
+      const state = st && st.pmMode ? st : { pmMode: true, mission, subModel, agents: [], denies: 0 };
+      if (!state.subModel && subModel) state.subModel = subModel;
       return inject(pm.charter(state.mission || mission, state));
     }
 

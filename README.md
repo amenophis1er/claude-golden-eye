@@ -54,8 +54,11 @@ Optional history migration (dev sessions live in the repo's store):
 
 ```
 /pm on — MISSION: ship the payments refactor; subagents only
+/pm on --sub opus MISSION: fable PM, opus workforce
 /pm off
 ```
+
+(The namespaced form `/claude-golden-eye:pm …` works identically.)
 
 - The hook flips dashboard state and injects the **PM charter**; every later prompt gets a
   short **re-anchor** (mission + team status + rules) — the main agent can't lose the plot
@@ -63,6 +66,11 @@ Optional history migration (dev sessions live in the repo's store):
 - Main-session `Edit/Write/MultiEdit/NotebookEdit` are **hook-denied** with a
   delegation-first reason; subagents keep full access (`agent_id` discrimination).
 - `Bash` stays allowed (charter asks for read-only discipline — soft rule).
+- **Subagent model pin** — `--sub <model>` (e.g. `--sub opus`) forces every delegation
+  onto that model: the charter instructs the PM to set the Agent tool's `model` field,
+  and the `PreToolUse` hook hard-rewrites the spawn input (`updatedInput`) if it is
+  missing or different — logged as a `PMModelPin` event. The main agent keeps the
+  session model (`/model`), so e.g. a Fable PM can run an all-Opus workforce.
 - Enforcement **fails open**: dashboard down ⇒ sessions run normally.
 
 ## Agent self-reporting (MCP)

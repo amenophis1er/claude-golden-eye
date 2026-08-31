@@ -57,6 +57,11 @@ export default function SessionView({ session: s, events, tab, now }: {
               <Crown size={11} /> PM engaged
             </span>
           )}
+          {s.pmMode && s.subModel && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-medium text-violet-800 dark:bg-violet-400/10 dark:text-violet-300">
+              <Bot size={11} /> subs → {s.subModel}
+            </span>
+          )}
           <span className="ml-auto text-xs text-zinc-400">active {relTime(s.lastActivity, now)}</span>
         </div>
 

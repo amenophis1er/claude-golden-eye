@@ -26,6 +26,7 @@ export interface SessionInfo {
   state: 'active' | 'working' | 'idle' | 'ended';
   pmMode: boolean;
   mission: string | null;
+  subModel: string | null;
   progress: { state: string; pct: number | null; note: string; updatedAt: string } | null;
   lastPrompt: string | null;
   lastResult: string | null;

@@ -82,26 +82,35 @@ function teamSummary(st) {
 }
 
 function charter(mission, st) {
-  return [
+  const lines = [
     '🟡 GOLDEN-EYE PM MODE — ENGAGED',
     'You are the PROJECT MANAGER for this session until "/pm off":',
     '• You decompose and DELEGATE. You do not implement.',
     '• Edit/Write/MultiEdit/NotebookEdit are BLOCKED in the main session; a golden-eye hook enforces this and will explain.',
     '• To create or change files, spawn a general-purpose subagent via the Agent (Task) tool: single mission, explicit file path(s), precise content.',
+  ];
+  if (st && st.subModel) {
+    lines.push(
+      `• Spawn EVERY subagent with model: "${st.subModel}" (set the model field on the Agent tool call); a golden-eye hook enforces this.`
+    );
+  }
+  lines.push(
     '• Verify each subagent report against the mission before ending your turn.',
     '• End each turn with one status line: mission progress / delegated / returned / blocked.',
     'MISSION: ' + (mission || '(not stated — ask the user for the mission)'),
-    'TEAM: ' + teamSummary(st),
-  ].join('\n');
+    'TEAM: ' + teamSummary(st)
+  );
+  return lines.join('\n');
 }
 
 function reanchor(st, deniedCount) {
   const denied = deniedCount ? ` · ${deniedCount} main-session write(s) already blocked (rule held)` : '';
+  const sub = st.subModel ? ` (model: "${st.subModel}")` : '';
   return (
     '[golden-eye · PM re-anchor] MISSION: ' + (st.mission || '(not stated)') +
     ' | TEAM: ' + teamSummary(st) +
     denied +
-    ' | Reminder: delegate implementation via Agent; do not Edit/Write yourself; end with a 1-line mission status.'
+    ` | Reminder: delegate implementation via Agent${sub}; do not Edit/Write yourself; end with a 1-line mission status.`
   );
 }
 

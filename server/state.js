@@ -145,6 +145,7 @@ class Store {
         startSource: null,
         pmMode: false,
         mission: null,
+        subModel: null,
         progress: null,
         agents: {},
         stats: { spawns: 0, toolCalls: 0, mainWrites: 0, denies: 0 },
@@ -213,7 +214,10 @@ class Store {
         // Golden-eye discipline bridge (not a Claude Code hook event): the
         // /pm command path flips engagement and stores the mission.
         s.pmMode = e.payload.action === 'on';
-        if (e.payload.action === 'on' && e.payload.mission) s.mission = e.payload.mission;
+        if (e.payload.action === 'on') {
+          if (e.payload.mission) s.mission = e.payload.mission;
+          s.subModel = e.payload.sub_model || null;
+        }
         break;
       }
 
@@ -433,6 +437,7 @@ class Store {
           startSource: s.startSource,
           pmMode: !!s.pmMode,
           mission: s.mission || null,
+          subModel: s.subModel || null,
           progress: s.progress || null,
           lastPrompt: s.lastPrompt,
           lastResult: s.lastResult,

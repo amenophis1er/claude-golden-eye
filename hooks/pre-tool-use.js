@@ -2,10 +2,14 @@
 'use strict';
 
 /**
- * PreToolUse: Observer logging (always) + PM-mode enforcement (V1).
+ * PreToolUse: Observer logging (always) + PM-mode enforcement (V1/V2).
  *
  * Decision matrix:
  *  - payload has agent_id        -> it's a SUBAGENT's call: always allow
+ *  - Agent/Task spawn + PM subModel pinned
+ *                                -> rewrite tool_input.model via updatedInput
+ *                                   (main session keeps its own model; every
+ *                                   delegation runs on the pinned one)
  *  - tool not in PM_BLOCKED set  -> allow (observer logging only)
  *  - PM mode off / server down   -> allow (fail-open, per SPEC §8)
  *  - PM mode ON + main session + blocked tool
@@ -42,11 +46,41 @@ async function main() {
     const sid = payload && payload.session_id;
     const tool = payload && payload.tool_name;
     if (!sid || !tool) return;
-    if (pm.PM_BLOCKED_TOOLS.has(tool) === false) return;
+    const isSpawn = tool === 'Agent' || tool === 'Task';
+    if (!isSpawn && pm.PM_BLOCKED_TOOLS.has(tool) === false) return;
     if (payload.agent_id) return; // subagents are the workforce: always allow
 
     const st = await pm.getPmState(sid);
     if (!st || !st.pmMode) return; // observer-only session
+
+    if (isSpawn) {
+      // Model pin: /pm on --sub <model> forces every delegation onto that
+      // model regardless of what the PM passed (or forgot to pass).
+      const input = payload.tool_input || {};
+      if (st.subModel && input.model !== st.subModel) {
+        await pm.notifyDenial({
+          __hook: 'PMModelPin',
+          __ts: new Date().toISOString(),
+          payload: {
+            session_id: sid,
+            tool_name: tool,
+            model: st.subModel,
+            was: input.model || null,
+            description: input.description || null,
+          },
+        });
+        process.stdout.write(
+          JSON.stringify({
+            hookSpecificOutput: {
+              hookEventName: 'PreToolUse',
+              permissionDecision: 'allow',
+              updatedInput: Object.assign({}, input, { model: st.subModel }),
+            },
+          }) + '\n'
+        );
+      }
+      return;
+    }
 
     await pm.notifyDenial({
       __hook: 'PMDeny',
