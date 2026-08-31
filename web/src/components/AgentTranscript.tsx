@@ -67,7 +67,7 @@ export default function AgentTranscript({ sessionId, agentId, running, fill = fa
     <div className="mb-1 flex items-center justify-between gap-2">
       <span className="text-[11px] text-zinc-400">
         {model && (
-          <>running on <span className="rounded bg-violet-100 px-1.5 py-px font-mono text-violet-700 dark:bg-violet-400/10 dark:text-violet-300">{model}</span></>
+          <>{running ? 'running on' : 'model'} <span className="rounded bg-violet-100 px-1.5 py-px font-mono text-violet-700 dark:bg-violet-400/10 dark:text-violet-300">{model}</span></>
         )}
       </span>
       <button

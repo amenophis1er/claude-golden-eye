@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import type { HookEvent, SessionInfo } from '../lib/types';
 import EventDetail from './EventDetail';
-import { clock, fmtDur, toolSummary } from '../lib/format';
+import { clock, fmtDur, toolSummary, parseTaskNotification } from '../lib/format';
 
 interface Entry {
   icon: any;
@@ -29,8 +29,18 @@ function baseEntry(e: HookEvent): Omit<Entry, 'event'> | null {
   switch (e.__hook) {
     case 'SessionStart':
       return { icon: Play, tone: 'text-zinc-400', label: 'session start', summary: p.source ?? '', raw: p, ts: e.__ts };
-    case 'UserPromptSubmit':
+    case 'UserPromptSubmit': {
+      const notif = parseTaskNotification(p.prompt);
+      if (notif)
+        return {
+          icon: CheckCircle2,
+          tone: 'text-teal-500',
+          label: `task ${notif.status ?? 'update'}`,
+          summary: notif.summary ?? notif.taskId ?? '',
+          raw: p, ts: e.__ts,
+        };
       return { icon: MessageSquare, tone: 'text-sky-500', label: 'prompt', summary: String(p.prompt ?? '').slice(0, 200), raw: p, ts: e.__ts };
+    }
     case 'PreToolUse': {
       const spawn = p.tool_name === 'Agent' || p.tool_name === 'Task';
       if (spawn)
@@ -79,13 +89,35 @@ function NowStrip({ session, now }: { session: SessionInfo; now: number }) {
   );
 }
 
+function LastPrompt({ text }: { text: string }) {
+  const notif = parseTaskNotification(text);
+  if (!notif) {
+    return <pre className="rounded-lg bg-zinc-100 p-3 text-xs leading-relaxed whitespace-pre-wrap dark:bg-zinc-900">{text}</pre>;
+  }
+  return (
+    <div className="rounded-lg border border-teal-200 bg-teal-50/60 p-3 dark:border-teal-900 dark:bg-teal-950/30">
+      <div className="flex items-center gap-1.5 text-xs font-medium text-teal-700 dark:text-teal-300">
+        <CheckCircle2 size={13} /> background task {notif.status ?? 'update'}
+        {notif.taskId && <span className="ml-auto font-mono text-[10px] text-teal-600/70 dark:text-teal-400/70">{notif.taskId}</span>}
+      </div>
+      {notif.summary && <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">{notif.summary}</p>}
+      {notif.result && (
+        <details className="mt-1.5">
+          <summary className="cursor-pointer text-[11px] text-teal-700/80 hover:text-teal-800 dark:text-teal-400/80 dark:hover:text-teal-300">result</summary>
+          <pre className="mt-1 max-h-64 overflow-y-auto rounded-md bg-white/70 p-2.5 text-[11px] leading-relaxed whitespace-pre-wrap dark:bg-zinc-900/70">{notif.result}</pre>
+        </details>
+      )}
+    </div>
+  );
+}
+
 function OutputPanel({ session }: { session: SessionInfo }) {
   return (
     <div className="flex w-[26rem] shrink-0 flex-col gap-3 overflow-y-auto border-l border-zinc-200 p-4 dark:border-zinc-800">
       {session.lastPrompt && (
         <section>
           <h3 className="mb-1.5 text-[11px] font-semibold tracking-wider text-zinc-400 uppercase">Last prompt</h3>
-          <pre className="rounded-lg bg-zinc-100 p-3 text-xs leading-relaxed whitespace-pre-wrap dark:bg-zinc-900">{session.lastPrompt}</pre>
+          <LastPrompt text={session.lastPrompt} />
         </section>
       )}
       <section className="flex min-h-0 flex-1 flex-col">

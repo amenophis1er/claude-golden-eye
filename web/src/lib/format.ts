@@ -31,3 +31,18 @@ export function toolSummary(input: any): string {
   const v = input.command ?? input.description ?? input.file_path ?? input.prompt ?? input.query ?? input.subject ?? input.skill ?? input.url ?? '';
   return String(v).slice(0, 160);
 }
+
+/** Parse the harness's <task-notification> prompt blob, or null if not one. */
+export function parseTaskNotification(text: string | null | undefined) {
+  if (!text || !/^\s*<task-notification>/.test(text)) return null;
+  const tag = (name: string) => {
+    const m = text.match(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`));
+    return m ? m[1].trim() : null;
+  };
+  return {
+    taskId: tag('task-id'),
+    status: tag('status'),
+    summary: tag('summary'),
+    result: tag('result'),
+  };
+}
