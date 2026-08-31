@@ -1,6 +1,8 @@
 import { Bot, User } from 'lucide-react';
 import type { AgentInfo, SessionInfo } from '../lib/types';
 import { fmtDur, relTime } from '../lib/format';
+import { useState } from 'react';
+import AgentTranscript from './AgentTranscript';
 
 function StatusPill({ status }: { status: AgentInfo['status'] }) {
   const map: Record<string, string> = {
@@ -11,8 +13,10 @@ function StatusPill({ status }: { status: AgentInfo['status'] }) {
   return <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${map[status] ?? map.done}`}>{status}</span>;
 }
 
-function AgentCard({ a, now }: { a: AgentInfo; now: number }) {
+function AgentCard({ a, now, sessionId }: { a: AgentInfo; now: number; sessionId: string }) {
   const topTools = Object.entries(a.tools).sort((x, y) => y[1] - x[1]).slice(0, 6);
+  const [showTranscript, setShowTranscript] = useState(false);
+  const running = a.status === 'running' || a.status === 'starting';
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
       <div className="flex items-center gap-2.5">
@@ -50,6 +54,14 @@ function AgentCard({ a, now }: { a: AgentInfo; now: number }) {
           <pre className="mt-1.5 max-h-56 overflow-y-auto rounded-md bg-zinc-100 p-2.5 text-[11px] leading-relaxed whitespace-pre-wrap dark:bg-zinc-900">{a.lastMessage}</pre>
         </details>
       )}
+      <details className="mt-1.5" onToggle={(e) => setShowTranscript((e.target as HTMLDetailsElement).open)}>
+        <summary className="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">
+          {running ? '● live transcript' : 'transcript'}
+        </summary>
+        {showTranscript && (
+          <AgentTranscript sessionId={sessionId} agentId={a.mainAgent ? null : a.id} running={running} />
+        )}
+      </details>
     </div>
   );
 }
@@ -60,8 +72,8 @@ export default function AgentsPanel({ session, now }: { session: SessionInfo; no
   return (
     <div className="h-full overflow-y-auto p-4">
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-        {main.map((a, i) => <AgentCard key={a.id ?? i} a={a} now={now} />)}
-        {delegates.map((a, i) => <AgentCard key={a.id ?? `d${i}`} a={a} now={now} />)}
+        {main.map((a, i) => <AgentCard key={a.id ?? i} a={a} now={now} sessionId={session.id} />)}
+        {delegates.map((a, i) => <AgentCard key={a.id ?? `d${i}`} a={a} now={now} sessionId={session.id} />)}
       </div>
       {!delegates.length && (
         <p className="py-6 text-center text-xs text-zinc-400">No subagents spawned yet.</p>

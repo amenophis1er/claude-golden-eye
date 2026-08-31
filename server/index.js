@@ -11,6 +11,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const Store = require('./state');
+const { tailTranscript } = require('./transcript');
 const config = require('./config');
 
 const HOST = process.env.GOLDEN_EYE_HOST || '127.0.0.1';
@@ -171,6 +172,25 @@ const server = http.createServer(async (req, res) => {
       maybeNotify(stored);
       lastEventAt = Date.now();
       return sendJson(res, 200, { ok: !!stored, sessionId: best ? best.id : null, candidates });
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/agent-transcript') {
+      // Live deep-dive: tail the JSONL transcript of the session (no agentId)
+      // or one subagent. The path is DERIVED server-side from stored session
+      // state — the client never supplies a filesystem path.
+      const sid = url.searchParams.get('sessionId');
+      const aid = url.searchParams.get('agentId');
+      const sess = sid ? store.sessions.get(sid) : null;
+      if (!sess || !sess.transcriptPath) return sendJson(res, 404, { error: 'unknown session / no transcript path' });
+      let file = sess.transcriptPath;
+      if (aid) {
+        if (!/^[\w.-]+$/.test(aid)) return sendJson(res, 400, { error: 'bad agentId' });
+        const a = sess.agents['agent:' + aid];
+        file =
+          (a && a.transcriptPath) ||
+          sess.transcriptPath.replace(/\.jsonl$/, '') + '/subagents/agent-' + aid + '.jsonl';
+      }
+      return sendJson(res, 200, { file, ...tailTranscript(file) });
     }
 
     if (req.method === 'GET' && url.pathname === '/api/state') {

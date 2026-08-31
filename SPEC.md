@@ -75,8 +75,8 @@ claude-golden-eye/
 └── SPEC.md
 ```
 
-Planned, not yet built: `server/transcript-tail.js` (passive JSONL watcher),
-`commands/eye.md` (/eye → open dashboard), `commands/status.md`.
+Planned, not yet built: `commands/eye.md` (/eye → open dashboard), `commands/status.md`.
+(The passive transcript path shipped as `server/transcript.js` + `/api/agent-transcript`.)
 
 ## 4. Data model (server)
 
