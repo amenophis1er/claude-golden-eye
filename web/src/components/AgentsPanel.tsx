@@ -4,6 +4,7 @@ import type { AgentInfo, SessionInfo } from '../lib/types';
 import { fmtDur, relTime, shortId } from '../lib/format';
 import { navigate } from '../lib/router';
 import AgentTranscript from './AgentTranscript';
+import Markdown from './Markdown';
 
 function StatusPill({ status }: { status: AgentInfo['status'] }) {
   const map: Record<string, string> = {
@@ -74,7 +75,9 @@ function AgentDetail({ a, now, sessionId }: { a: AgentInfo; now: number; session
         {a.lastMessage && (
           <details className="mt-2" open={!a.mainAgent && a.status === 'done'}>
             <summary className="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">final report</summary>
-            <pre className="mt-1.5 max-h-72 overflow-y-auto rounded-md bg-zinc-100 p-2.5 text-[11px] leading-relaxed whitespace-pre-wrap dark:bg-zinc-900">{a.lastMessage}</pre>
+            <div className="mt-1.5 max-h-72 overflow-y-auto rounded-md bg-zinc-100 p-2.5 dark:bg-zinc-900">
+              <Markdown text={a.lastMessage} />
+            </div>
           </details>
         )}
       </div>
