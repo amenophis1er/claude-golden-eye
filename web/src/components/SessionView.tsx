@@ -5,7 +5,6 @@ import { baseName, fmtTokens, relTime, shortId } from '../lib/format';
 import LiveFeed from './LiveFeed';
 import AgentsPanel from './AgentsPanel';
 import Timeline from './Timeline';
-import Composer from './Composer';
 
 const TABS: { id: Tab; label: string; icon: any }[] = [
   { id: 'feed', label: 'Live', icon: Radio },
@@ -190,7 +189,6 @@ export default function SessionView({ session: s, events, tab, sub, now }: {
         {tab === 'agents' && <AgentsPanel session={s} now={now} sub={sub} />}
         {tab === 'timeline' && <Timeline events={sessionEvents} />}
       </div>
-      <Composer session={s} />
     </div>
   );
 }

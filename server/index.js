@@ -22,9 +22,7 @@ const IDLE_EXIT_MS = Number(process.env.GOLDEN_EYE_IDLE_EXIT_MS ?? 30 * 60 * 100
 let lastEventAt = Date.now();
 
 // Desktop notifications (walk-away oversight). Throttled; off-switchable.
-const { execFile, spawn } = require('child_process');
-const crypto = require('crypto');
-const os = require('os');
+const { execFile } = require('child_process');
 let lastNotifyAt = 0;
 const NOTIFY_THROTTLE_MS = 5000;
 // Throttled events are coalesced, not dropped: the newest one flushes when
@@ -70,45 +68,6 @@ function maybeNotify(ev) {
   } else if (ev.__hook === 'Stop') {
     notifyDesktop('golden-eye: turn ended', String(p.last_assistant_message || ''));
   }
-}
-
-// Composer auth: driving a session from the dashboard is command execution,
-// so /api/continue demands the token created on first boot (mode 600).
-// Read it once with: cat ~/.golden-eye/token
-let API_TOKEN = null;
-function ensureToken() {
-  const f = path.join(config.DATA_DIR, 'token');
-  try {
-    API_TOKEN = fs.readFileSync(f, 'utf8').trim();
-  } catch (_) {}
-  if (!API_TOKEN) {
-    API_TOKEN = crypto.randomBytes(16).toString('hex');
-    try {
-      fs.mkdirSync(config.DATA_DIR, { recursive: true });
-      fs.writeFileSync(f, API_TOKEN + '\n', { mode: 0o600 });
-    } catch (_) {}
-  }
-}
-ensureToken();
-
-// The launchd environment has a minimal PATH — resolve the claude binary
-// across common install locations.
-function findClaudeBin() {
-  const cands = [];
-  for (const dir of (process.env.PATH || '').split(':')) if (dir) cands.push(path.join(dir, 'claude'));
-  cands.push(
-    '/opt/homebrew/bin/claude',
-    '/usr/local/bin/claude',
-    path.join(os.homedir(), '.local', 'bin', 'claude'),
-    path.join(os.homedir(), '.claude', 'local', 'claude')
-  );
-  for (const c of cands) {
-    try {
-      fs.accessSync(c, fs.constants.X_OK);
-      return c;
-    } catch (_) {}
-  }
-  return null;
 }
 
 const store = new Store();
@@ -302,62 +261,6 @@ const server = http.createServer(async (req, res) => {
       }
       lastEventAt = Date.now();
       return sendJson(res, 200, { ok: true, pruned: ids });
-    }
-
-    if (req.method === 'POST' && url.pathname === '/api/continue') {
-      // Dashboard composer: continue a session headlessly via
-      // `claude -p --resume <id> "<prompt>"` in the session's cwd. The
-      // resumed turn's hooks stream straight back into this dashboard.
-      if ((req.headers['x-ge-token'] || '') !== API_TOKEN) {
-        return sendJson(res, 401, { error: 'token required — cat ~/.golden-eye/token' });
-      }
-      const body = await readJsonBody(req);
-      const sess = body && body.sessionId ? store.sessions.get(body.sessionId) : null;
-      const prompt = body && typeof body.prompt === 'string' ? body.prompt.trim() : '';
-      if (!sess || !prompt) return sendJson(res, 400, { error: 'sessionId + prompt required' });
-      if (!sess.cwd) return sendJson(res, 400, { error: 'session has no cwd' });
-      if (sess.state === 'working' && Date.now() - Date.parse(sess.lastActivity) < 10 * 60 * 1000) {
-        return sendJson(res, 409, { error: 'session is mid-turn — wait for it to finish' });
-      }
-      const bin = findClaudeBin();
-      if (!bin) return sendJson(res, 500, { error: 'claude binary not found from the server environment' });
-      // Sessions may belong to a non-default instance (CLAUDE_CONFIG_DIR).
-      // The transcript lives at <config-root>/projects/<proj>/<sid>.jsonl —
-      // derive the root so --resume looks in the right store.
-      const env = { ...process.env };
-      // Under launchd, PATH is minimal — but the resumed turn's HOOKS run
-      // `node ...` via /bin/sh and die with "node: command not found",
-      // which silently starves the dashboard of that turn's events.
-      // Guarantee node + claude directories are on PATH.
-      env.PATH = [
-        ...new Set(
-          [path.dirname(process.execPath), path.dirname(bin), '/opt/homebrew/bin', '/usr/local/bin']
-            .concat((env.PATH || '').split(':'))
-            .filter(Boolean)
-        ),
-      ].join(':');
-      if (sess.transcriptPath) {
-        const root = path.dirname(path.dirname(path.dirname(sess.transcriptPath)));
-        if (path.basename(root).startsWith('.claude')) env.CLAUDE_CONFIG_DIR = root;
-      }
-      let fd = 'ignore';
-      try {
-        fd = fs.openSync(path.join(config.DATA_DIR, 'continue.log'), 'a');
-      } catch (_) {}
-      const child = spawn(bin, ['-p', '--resume', sess.id, prompt], {
-        cwd: sess.cwd,
-        detached: true,
-        stdio: ['ignore', fd, fd],
-        env,
-      });
-      child.unref();
-      const ev = store.addEvent({
-        __hook: 'DashboardPrompt',
-        payload: { session_id: sess.id, prompt: prompt.slice(0, 2000), pid: child.pid },
-      });
-      if (ev) broadcast(ev);
-      lastEventAt = Date.now();
-      return sendJson(res, 200, { ok: true, pid: child.pid });
     }
 
     if (req.method === 'GET' && url.pathname === '/healthz') {

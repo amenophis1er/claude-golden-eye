@@ -181,20 +181,6 @@ zero-dependency server — end users need no build step.
 - UI development: `cd web && npm install && npm run dev` (Vite proxies `/api` + `/pm`
   to `127.0.0.1:7717`). Ship with `npm run build` and commit `web/dist/`.
 
-## Composer (continue a session from the dashboard)
-
-Each non-ended session has a prompt box at the bottom of its view. Sending runs
-`claude -p --resume <session-id> "<prompt>"` in the project directory — the
-resumed turn's hooks stream straight back into the feed, so you watch it run
-live (works from the phone over Tailscale too).
-
-- **Auth**: the first send asks for the server token — `cat ~/.golden-eye/token`
-  (generated on boot, mode 600). Stored in the browser after that.
-- **Guard rails**: refused while the session is mid-turn; hidden for ended
-  sessions; sends appear as `DashboardPrompt` rows in the feed.
-- **Caveat**: an interactive terminal left open on that session won't display
-  the exchange — exit and `claude --resume` there to catch up.
-
 ## Always-on server (launchd)
 
 Sessions bootstrap the server on demand (`SessionStart` → `boot.js`), but for
