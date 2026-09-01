@@ -14,6 +14,7 @@
  */
 
 const { readStdinJson } = require('./lib/util');
+const { parsePmPrompt } = require('./lib/parse');
 const pm = require('./lib/pm');
 
 function inject(text) {
@@ -35,39 +36,15 @@ async function main() {
     const prompt = (payload && payload.prompt) || '';
     if (!sid) return;
 
-    // /pm handling. Two entry paths:
-    //  1. expanded skill/command text carrying the PM-MODE-COMMAND marker —
-    //     parse $ARGUMENTS from `Arguments: "..."` (case-insensitive: a
-    //     failed parse here used to turn "/pm off" into a re-engage).
-    //  2. raw "/pm ..." text: plugin commands reach this hook unexpanded, so
-    //     this is the path that fires in practice. Matches both "/pm ..."
-    //     and the namespaced "/golden-eye-pm:pm ...".
-    let pmArgs = null;
-    const marker = prompt.indexOf('PM-MODE-COMMAND');
-    if (marker !== -1) {
-      const m = prompt.match(/arguments:\s*"([\s\S]*)"/i);
-      pmArgs = m ? m[1].trim() : '';
-    } else if (/^\s*\/(?:[\w.-]+:)?pm\b/.test(prompt)) {
-      pmArgs = prompt.replace(/^\s*\/(?:[\w.-]+:)?pm\b/, '').trim();
-    }
-
-    if (pmArgs !== null) {
-      if (/^off\b/i.test(pmArgs)) {
+    // /pm handling: parsing (both the expanded-marker path and the raw
+    // slash-text path, incl. plugin-namespaced forms) lives in lib/parse.js.
+    const parsed = parsePmPrompt(prompt);
+    if (parsed) {
+      if (parsed.action === 'off') {
         await pm.setPm({ sessionId: sid, action: 'off' });
         return inject('🟡 golden-eye: PM mode OFF. You are back to normal execution.');
       }
-      // "on", "<mission>", "on — <mission>" all engage.
-      // Optional subagent model pin: "--sub <model>" / "sub-model: <model>"
-      // anywhere in the args (e.g. "/pm on --sub opus MISSION: ship it").
-      let subModel = null;
-      const argsSansSub = pmArgs.replace(
-        /(?:--sub(?:-model)?[\s=:]+|sub[-_]?model\s*[:=]\s*)([\w.-]+)\s*/i,
-        (_, m) => { subModel = m.toLowerCase(); return ''; }
-      );
-      const mission = argsSansSub
-        .replace(/^on\b/, '')
-        .replace(/^[-–—:,.]?\s*/, '')
-        .trim();
+      const { mission, subModel } = parsed;
       const st = await pm.setPm({ sessionId: sid, action: 'on', mission, subModel });
       const state = st && st.pmMode ? st : { pmMode: true, mission, subModel, agents: [], denies: 0 };
       if (!state.subModel && subModel) state.subModel = subModel;
