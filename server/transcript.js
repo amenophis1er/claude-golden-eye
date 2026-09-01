@@ -164,39 +164,49 @@ function sessionStats(file) {
 // ---------- delegation-prompt backfill ----------
 // When the spawn event was never observed (agent born before a resume),
 // the agent's own transcript still opens with the delegation prompt.
-const promptCache = new Map(); // file -> first-line description
+const metaCache = new Map(); // transcript file -> { description, agentType, model } | null
 
-function agentDescription(file) {
+function agentMeta(file) {
   if (!file) return null;
-  if (promptCache.has(file)) return promptCache.get(file);
-  let fd = null;
+  if (metaCache.has(file)) return metaCache.get(file);
+  let value = null;
+  // Preferred: the sibling .meta.json Claude Code writes next to each
+  // subagent transcript — { agentType, description, model, ... }.
   try {
-    fd = fs.openSync(file, 'r');
-    const buf = Buffer.alloc(16384);
-    const n = fs.readSync(fd, buf, 0, buf.length, 0);
-    for (const line of buf.toString('utf8', 0, n).split('\n')) {
-      if (!line.trim()) continue;
-      let j;
-      try {
-        j = JSON.parse(line);
-      } catch (_) {
-        continue;
-      }
-      if (j.type === 'user' && j.message) {
-        const text = flattenContent(j.message.content).trim();
-        if (text) {
-          const desc = SNIP(text.split('\n')[0], 140);
-          promptCache.set(file, desc);
-          return desc;
+    const m = JSON.parse(fs.readFileSync(file.replace(/\.jsonl$/, '.meta.json'), 'utf8'));
+    value = { description: m.description || null, agentType: m.agentType || null, model: m.model || null };
+  } catch (_) {}
+  // Fallback: the transcript's first user message is the delegation prompt.
+  if (!value) {
+    let fd = null;
+    try {
+      fd = fs.openSync(file, 'r');
+      const buf = Buffer.alloc(16384);
+      const n = fs.readSync(fd, buf, 0, buf.length, 0);
+      for (const line of buf.toString('utf8', 0, n).split('\n')) {
+        if (!line.trim()) continue;
+        let j;
+        try {
+          j = JSON.parse(line);
+        } catch (_) {
+          continue;
+        }
+        if (j.type === 'user' && j.message) {
+          const text = flattenContent(j.message.content).trim();
+          if (text) {
+            value = { description: SNIP(text.split('\n')[0], 140), agentType: null, model: null };
+            break;
+          }
         }
       }
+    } catch (_) {
+      return null; // transcript missing — retry on a later request
+    } finally {
+      if (fd != null) try { fs.closeSync(fd); } catch (_) {}
     }
-  } catch (_) {
-    return null; // transcript missing/partial — retry on a later request
-  } finally {
-    if (fd != null) try { fs.closeSync(fd); } catch (_) {}
   }
-  return null;
+  metaCache.set(file, value);
+  return value;
 }
 
-module.exports = { tailTranscript, sessionStats, agentDescription };
+module.exports = { tailTranscript, sessionStats, agentMeta };

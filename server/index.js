@@ -11,7 +11,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const Store = require('./state');
-const { tailTranscript, sessionStats, agentDescription } = require('./transcript');
+const { tailTranscript, sessionStats, agentMeta } = require('./transcript');
 const { tasksForSession } = require('./tasks');
 const config = require('./config');
 
@@ -206,11 +206,16 @@ const server = http.createServer(async (req, res) => {
         // Agents observed only from their tail (spawn predates a resume)
         // have no description — recover it from their own transcript.
         for (const a of sess.agents) {
-          if (!a.mainAgent && !a.description && a.id && sess.transcriptPath) {
+          if (!a.mainAgent && a.id && sess.transcriptPath && (!a.description || !a.type || !a.model)) {
             const f =
               a.transcriptPath ||
               sess.transcriptPath.replace(/\.jsonl$/, '') + '/subagents/agent-' + a.id + '.jsonl';
-            a.description = agentDescription(f);
+            const m = agentMeta(f);
+            if (m) {
+              if (!a.description) a.description = m.description;
+              if (!a.type) a.type = m.agentType;
+              if (!a.model) a.model = m.model;
+            }
           }
         }
       }

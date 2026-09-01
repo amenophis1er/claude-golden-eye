@@ -17,6 +17,7 @@ interface Entry {
   event: HookEvent;
   ts: string;
   emphasis?: boolean; // red rows (denials, blocked)
+  toolUseId?: string; // PreToolUse rows: for in-flight detection
 }
 
 function toEntry(e: HookEvent, nameFor: (id: string) => string): Entry | null {
@@ -46,7 +47,7 @@ function baseEntry(e: HookEvent, nameFor: (id: string) => string): Omit<Entry, '
       const spawn = p.tool_name === 'Agent' || p.tool_name === 'Task';
       if (spawn)
         return { icon: GitFork, tone: 'text-violet-500', label: 'delegate', summary: p.tool_input?.description ?? toolSummary(p.tool_input), raw: p, ts: e.__ts };
-      return { icon: TerminalSquare, tone: 'text-zinc-400', label: `${who} · ${p.tool_name}`, summary: toolSummary(p.tool_input), raw: p, ts: e.__ts };
+      return { icon: TerminalSquare, tone: 'text-zinc-400', label: `${who} · ${p.tool_name}`, summary: toolSummary(p.tool_input), raw: p, ts: e.__ts, toolUseId: p.tool_use_id };
     }
     case 'PMDeny':
       return { icon: ShieldX, tone: 'text-red-500', label: `write blocked · ${p.tool_name}`, summary: toolSummary(p.tool_input), raw: p, ts: e.__ts, emphasis: true };
@@ -227,6 +228,17 @@ export default function LiveFeed({ session, events, now }: { session: SessionInf
     return d.length > 34 ? `${d.slice(0, 34)}…` : d;
   };
   const entries = events.map((e) => toEntry(e, nameFor)).filter(Boolean) as Entry[];
+
+  // In-flight detection: a fresh PreToolUse with no matching PostToolUse is a
+  // tool call still executing — the terminal shows a spinner; so should we.
+  const postIds = new Set(
+    events.filter((e) => e.__hook === 'PostToolUse' && e.payload?.tool_use_id).map((e) => e.payload.tool_use_id)
+  );
+  const isRunning = (en: Entry) =>
+    !!en.toolUseId &&
+    !postIds.has(en.toolUseId) &&
+    now - Date.parse(en.ts) < 30 * 60 * 1000 &&
+    (session.state === 'working' || session.state === 'active');
   const scroller = useRef<HTMLDivElement>(null);
   const [follow, setFollow] = useState(true);
   // newest-first is the monitoring default; chronological reads like a story.
@@ -274,6 +286,11 @@ export default function LiveFeed({ session, events, now }: { session: SessionInf
                   <span className="w-14 shrink-0 text-[11px] text-zinc-400 tabular-nums">{clock(en.ts)}</span>
                   <Icon size={13} className={`relative top-0.5 shrink-0 ${en.tone}`} />
                   <span className={`shrink-0 text-xs font-medium ${en.emphasis ? 'text-red-600 dark:text-red-400' : ''}`}>{en.label}</span>
+                  {isRunning(en) && (
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-1.5 text-[10px] font-medium text-emerald-700 tabular-nums dark:bg-emerald-950 dark:text-emerald-300">
+                      <span className="h-1 w-1 rounded-full bg-emerald-500 pulse-dot" /> running {fmtDur(now - Date.parse(en.ts))}
+                    </span>
+                  )}
                   <span className="min-w-0 flex-1 truncate text-xs text-zinc-500">{en.summary}</span>
                 </summary>
                 <EventDetail event={en.event} />
