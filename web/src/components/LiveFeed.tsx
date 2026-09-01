@@ -19,14 +19,14 @@ interface Entry {
   emphasis?: boolean; // red rows (denials, blocked)
 }
 
-function toEntry(e: HookEvent): Entry | null {
-  const base = baseEntry(e);
+function toEntry(e: HookEvent, nameFor: (id: string) => string): Entry | null {
+  const base = baseEntry(e, nameFor);
   return base ? { ...base, event: e } : null;
 }
 
-function baseEntry(e: HookEvent): Omit<Entry, 'event'> | null {
+function baseEntry(e: HookEvent, nameFor: (id: string) => string): Omit<Entry, 'event'> | null {
   const p = e.payload ?? {};
-  const who = p.agent_id ? `agent ${String(p.agent_id).slice(0, 6)}` : 'main';
+  const who = p.agent_id ? nameFor(String(p.agent_id)) : 'main';
   switch (e.__hook) {
     case 'SessionStart':
       return { icon: Play, tone: 'text-zinc-400', label: 'session start', summary: p.source ?? '', raw: p, ts: e.__ts };
@@ -51,7 +51,7 @@ function baseEntry(e: HookEvent): Omit<Entry, 'event'> | null {
     case 'PMDeny':
       return { icon: ShieldX, tone: 'text-red-500', label: `write blocked · ${p.tool_name}`, summary: toolSummary(p.tool_input), raw: p, ts: e.__ts, emphasis: true };
     case 'SubagentStop':
-      return { icon: CheckCircle2, tone: 'text-emerald-500', label: `agent ${String(p.agent_id ?? '').slice(0, 6)} finished`, summary: String(p.last_assistant_message ?? '').slice(0, 200), raw: p, ts: e.__ts };
+      return { icon: CheckCircle2, tone: 'text-emerald-500', label: `${nameFor(String(p.agent_id ?? ''))} finished`, summary: String(p.last_assistant_message ?? '').slice(0, 200), raw: p, ts: e.__ts };
     case 'MCPProgress':
       return {
         icon: TrendingUp,
@@ -218,7 +218,15 @@ function OutputPanel({ session }: { session: SessionInfo }) {
 }
 
 export default function LiveFeed({ session, events, now }: { session: SessionInfo; events: HookEvent[]; now: number }) {
-  const entries = events.map(toEntry).filter(Boolean) as Entry[];
+  // Feed rows carry only agent_id — resolve it to the delegation description
+  // (what the human actually tracks), falling back to the short id.
+  const nameFor = (id: string) => {
+    const a = session.agents.find((x) => x.id === id);
+    const d = a?.description;
+    if (!d) return `agent ${id.slice(0, 6)}`;
+    return d.length > 34 ? `${d.slice(0, 34)}…` : d;
+  };
+  const entries = events.map((e) => toEntry(e, nameFor)).filter(Boolean) as Entry[];
   const scroller = useRef<HTMLDivElement>(null);
   const [follow, setFollow] = useState(true);
   // newest-first is the monitoring default; chronological reads like a story.
