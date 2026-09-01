@@ -275,9 +275,13 @@ class Store {
           // never Post — a Pre-without-Post pair IS a denial signal).
           s.stats.toolCalls += 1;
           const a = this.agentForToolEvent(s, p);
-          // A tool event proves the agent is alive — "starting" otherwise
-          // sticks until the parent's collection event at delegation end.
-          if (!a.mainAgent && a.status === 'starting') a.status = 'running';
+          // A tool event proves the agent is alive: "starting" otherwise
+          // sticks until collection, and a DONE agent emitting tool events
+          // was resumed (backgrounded agents get SendMessage'd back to work).
+          if (!a.mainAgent && (a.status === 'starting' || a.status === 'done')) {
+            a.status = 'running';
+            a.endedAt = null;
+          }
           a.lastTool = tool;
           a.lastToolAt = e.__ts;
           a.tools[tool] = (a.tools[tool] || 0) + 1;

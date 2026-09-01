@@ -260,3 +260,17 @@ test('serialized main agent reads done for ended sessions too', () => {
   const out = store.serialize().sessions.find((x) => x.id === SID);
   assert.equal(out.agents.find((a) => a.mainAgent).status, 'done');
 });
+
+test('a done agent that emits tool events again was resumed — back to running', () => {
+  const store = freshStore();
+  add(store, 'PreToolUse', { tool_name: 'Agent', tool_use_id: 't_bg', tool_input: { description: 'bg work', prompt: 'p' } });
+  add(store, 'PreToolUse', { tool_name: 'Bash', tool_input: {}, agent_id: 'BG1' });
+  add(store, 'SubagentStop', { agent_id: 'BG1', last_assistant_message: 'first stop' });
+  assert.equal(session(store).agents['agent:BG1'].status, 'done');
+  // SendMessage resume: same agent id starts working again
+  add(store, 'PreToolUse', { tool_name: 'Edit', tool_input: { file_path: '/x' }, agent_id: 'BG1' });
+  assert.equal(session(store).agents['agent:BG1'].status, 'running');
+  assert.equal(session(store).agents['agent:BG1'].endedAt, null);
+  add(store, 'SubagentStop', { agent_id: 'BG1', last_assistant_message: 'second stop' });
+  assert.equal(session(store).agents['agent:BG1'].status, 'done');
+});

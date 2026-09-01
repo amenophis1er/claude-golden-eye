@@ -47,7 +47,13 @@ function baseEntry(e: HookEvent, nameFor: (id: string) => string): Omit<Entry, '
       const spawn = p.tool_name === 'Agent' || p.tool_name === 'Task';
       if (spawn)
         return { icon: GitFork, tone: 'text-violet-500', label: 'delegate', summary: p.tool_input?.description ?? toolSummary(p.tool_input), raw: p, ts: e.__ts };
-      return { icon: TerminalSquare, tone: 'text-zinc-400', label: `${who} · ${p.tool_name}`, summary: toolSummary(p.tool_input), raw: p, ts: e.__ts, toolUseId: p.tool_use_id };
+      return {
+        icon: TerminalSquare,
+        tone: 'text-zinc-400',
+        label: `${who} · ${p.tool_name}${p.tool_input?.run_in_background ? ' ⏱bg' : ''}`,
+        summary: toolSummary(p.tool_input),
+        raw: p, ts: e.__ts, toolUseId: p.tool_use_id,
+      };
     }
     case 'PMDeny':
       return { icon: ShieldX, tone: 'text-red-500', label: `write blocked · ${p.tool_name}`, summary: toolSummary(p.tool_input), raw: p, ts: e.__ts, emphasis: true };
