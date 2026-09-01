@@ -274,3 +274,13 @@ test('a done agent that emits tool events again was resumed — back to running'
   add(store, 'SubagentStop', { agent_id: 'BG1', last_assistant_message: 'second stop' });
   assert.equal(session(store).agents['agent:BG1'].status, 'done');
 });
+
+test('SessionEnd closes out agents still marked running (teardown emits no stop)', () => {
+  const store = freshStore();
+  add(store, 'PreToolUse', { tool_name: 'Agent', tool_use_id: 't_z', tool_input: { description: 'bg', prompt: 'p' } });
+  add(store, 'PreToolUse', { tool_name: 'Bash', tool_input: {}, agent_id: 'Z1' });
+  assert.equal(session(store).agents['agent:Z1'].status, 'running');
+  add(store, 'SessionEnd', { reason: 'other' });
+  assert.equal(session(store).agents['agent:Z1'].status, 'done');
+  assert.ok(session(store).agents['agent:Z1'].endedAt);
+});

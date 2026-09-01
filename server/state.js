@@ -429,6 +429,14 @@ class Store {
 
       case 'SessionEnd': {
         s.state = 'ended';
+        // No subagent survives its session: teardown at exit emits no
+        // SubagentStop, so close out anything still marked live.
+        for (const a of Object.values(s.agents)) {
+          if (!a.mainAgent && (a.status === 'running' || a.status === 'starting')) {
+            a.status = 'done';
+            if (!a.endedAt) a.endedAt = e.__ts;
+          }
+        }
         break;
       }
 
