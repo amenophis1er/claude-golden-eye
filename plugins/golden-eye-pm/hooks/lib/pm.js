@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * PM-mode discipline (V1/M2). This module is the *discipline* side of
+ * PM-mode discipline. This module is the *discipline* side of
  * golden-eye (the Observer side stays read-only):
  *
  *  - getPmState()  — ask the singleton server whether this session is in PM

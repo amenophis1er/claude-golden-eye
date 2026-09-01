@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Golden-eye MCP server (M3): a dependency-free JSON-RPC 2.0 server over
+ * Golden-eye MCP server: a dependency-free JSON-RPC 2.0 server over
  * stdio (newline-delimited), the transport Claude Code uses for MCP servers.
  *
  * Tools:

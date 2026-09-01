@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Transcript tail (SPEC's passive path): tolerant reader for Claude Code
+ * Transcript tail (the passive data path): tolerant reader for Claude Code
  * JSONL transcripts — the session's own file, or a subagent's file under
  * <session-dir>/subagents/agent-<id>.jsonl. The format is unofficial, so
  * every line parse is best-effort and unknown shapes are skipped.

@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Golden-eye server (M1/V0): one dependency-free node process, three roles:
+ * Golden-eye server: one dependency-free node process, three roles:
  *  1. HTTP ingest      POST /ingest        <- hook bridge posts every hook event
  *  2. Live API         GET  /api/state     (snapshot)  GET /api/events (SSE stream)
  *  3. Static hosting   GET  /              <- the web/ dashboard (no build step)

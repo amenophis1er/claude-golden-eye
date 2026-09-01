@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# M0 probe: wire the plugin's logger hooks into a throwaway project, run one
+# Hook-payload probe: wire the plugin's logger hooks into a throwaway project, run one
 # headless session that forces a main-agent write + a subagent spawn, then
 # summarize the captured hook payloads.
 set -euo pipefail

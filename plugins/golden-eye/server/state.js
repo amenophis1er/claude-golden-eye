@@ -8,7 +8,8 @@
  * Correlation note (see probe/FINDINGS.md): spawn events (PreToolUse/PostToolUse
  * on the Agent tool) carry no agent_id; SubagentStop carries agent_id but no
  * tool_use_id. Binding is FIFO over unbound spawns — correct for sequential
- * (PM-style) delegation, best-effort for parallel spawns. Flagged for M2.
+ * (PM-style) delegation, best-effort for parallel spawns until the
+ * deterministic PostToolUse(Agent) repair lands (see bindAgent/spawnKey).
  */
 
 const fs = require('fs');

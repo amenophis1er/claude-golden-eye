@@ -17,8 +17,8 @@ This repo is a marketplace shipping **two independent plugins**:
   with the observer for state and dashboard display; the observer never
   requires it.
 
-Status: **M0–M3 complete and empirically verified.** Spec: [SPEC.md](SPEC.md) ·
-Probe evidence: [probe/FINDINGS.md](probe/FINDINGS.md)
+Built empirically: every hook behavior the plugins rely on was verified against
+a live probe rig first — see [probe/FINDINGS.md](probe/FINDINGS.md).
 
 ---
 
@@ -188,7 +188,7 @@ delegation stats on the dashboard.
   (+ legacy `TodoWrite`) events are the fallback when no store dir exists.
 - Denied calls appear as `PRE` rows without `POST` (Pre-without-Post = denial signal).
 - `startSource: null` means the session was observed without a `SessionStart` (attached mid-stream).
-- Probe rig and findings for the original M0 payload discovery: [probe/](probe/).
+- Probe rig and findings for the original hook-payload discovery: [probe/](probe/).
 
 ## Dashboard UI
 

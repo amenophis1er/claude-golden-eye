@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * M0 probe: shared stdin->JSONL logger for all hook scripts.
+ * Shared stdin->JSONL logger for all hook scripts.
  * Contract: never throw, never write to stdout (some events like
  * SessionStart / UserPromptSubmit inject stdout into context on exit 0),
  * always exit 0 so a probe failure can never break a real session.

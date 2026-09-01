@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Summarize .probe/hook-events.jsonl for the M0 probe questions:
+ * Summarize .probe/hook-events.jsonl for the probe questions:
  *  Q1  Which hook events fired, and how often?
  *  Q2  Do payloads distinguish main session vs subagent?
  *      (session_id / transcript_path / agent-ish fields)

@@ -12,7 +12,7 @@
  *                                   (main session keeps its own model; every
  *                                   delegation runs on the pinned one)
  *  - tool not in PM_BLOCKED set  -> allow
- *  - PM mode off / server down   -> allow (fail-open, per SPEC §8)
+ *  - PM mode off / server down   -> allow (fail-open)
  *  - PM mode ON + main session + blocked tool
  *                                -> deny with a delegation-first reason, and
  *                                   mirror a PMDeny event to the dashboard.
