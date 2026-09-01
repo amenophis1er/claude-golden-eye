@@ -52,6 +52,16 @@ export interface SessionInfo {
     usageApprox: boolean;
   } | null;
   agents: AgentInfo[];
+  /** Transcript history older than the first observed hook event (resume backfill). */
+  replay?: ReplayEntry[];
+}
+
+export interface ReplayEntry {
+  ts: string | null;
+  kind: 'user' | 'text' | 'tool';
+  text?: string;
+  name?: string;
+  input?: Record<string, string> | null;
 }
 
 export interface HookEvent {

@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowDownUp, Brain, MessageSquare, TerminalSquare, CornerDownRight } from 'lucide-react';
+import { ArrowDownUp, Brain, MessageSquare, TerminalSquare, CornerDownRight, User } from 'lucide-react';
 import { clock, fmtTokens } from '../lib/format';
 import Markdown from './Markdown';
 
 interface TEntry {
   ts: string | null;
-  kind: 'thinking' | 'text' | 'tool' | 'result';
+  kind: 'thinking' | 'text' | 'tool' | 'result' | 'user';
   text?: string;
   name?: string;
   input?: Record<string, string> | null;
@@ -119,6 +119,14 @@ export default function AgentTranscript({ sessionId, agentId, running, fill = fa
               </summary>
               <p className="mt-1 ml-4 text-[11px] leading-relaxed whitespace-pre-wrap text-zinc-500 italic">{en.text}</p>
             </details>
+          );
+        if (en.kind === 'user')
+          return (
+            <div key={i} className="my-2 flex gap-1.5 rounded-md bg-amber-50/70 px-1.5 py-1.5 dark:bg-amber-950/20">
+              <User size={11} className="mt-1 shrink-0 text-amber-500" />
+              <pre className="min-w-0 flex-1 font-sans text-[11px] leading-relaxed whitespace-pre-wrap">{en.text}</pre>
+              {en.ts && <span className="shrink-0 text-[10px] text-zinc-400 tabular-nums">{clock(en.ts)}</span>}
+            </div>
           );
         if (en.kind === 'text')
           return (

@@ -67,11 +67,24 @@ function parseLine(line, entries, meta) {
         entries.push({ ts, kind: 'tool', name: c.name || '?', input: toolInputBrief(c.input) });
       }
     }
-  } else if (j.type === 'user' && msg && Array.isArray(msg.content)) {
-    for (const c of msg.content) {
-      if (c && c.type === 'tool_result') {
+  } else if (j.type === 'user' && msg) {
+    const blocks = Array.isArray(msg.content)
+      ? msg.content
+      : typeof msg.content === 'string'
+        ? [{ type: 'text', text: msg.content }]
+        : [];
+    for (const c of blocks) {
+      if (!c || typeof c !== 'object') continue;
+      if (c.type === 'tool_result') {
         const text = flattenContent(c.content).trim();
         if (text) entries.push({ ts, kind: 'result', text: SNIP(text, 600), isError: !!c.is_error });
+      } else if (c.type === 'text' && typeof c.text === 'string' && !j.isMeta) {
+        const text = c.text.trim();
+        // Real prompts only: skip command expansions, caveat banners and
+        // hook/system-injected context the harness stores as user turns.
+        if (text && !/^<(command-name|local-command-stdout|system-reminder)|^Caveat: The messages below/.test(text)) {
+          entries.push({ ts, kind: 'user', text: SNIP(text, 2000) });
+        }
       }
     }
   }
@@ -217,4 +230,43 @@ function agentMeta(file) {
   return value;
 }
 
-module.exports = { tailTranscript, sessionStats, agentMeta };
+// ---------- resume backfill ----------
+// A resumed (or mid-stream-attached) session has history the hooks never saw.
+// The transcript holds it all: everything strictly OLDER than the first
+// observed hook event is replayable — newer entries would duplicate live hook
+// rows, so the boundary is what makes this safe. Cached like sessionStats.
+const REPLAY_MAX_ENTRIES = 150;
+const replayCache = new Map(); // path -> { at, key, beforeTs, value }
+
+function sessionReplay(file, beforeTs) {
+  if (!file) return null;
+  const hit = replayCache.get(file);
+  if (hit && hit.beforeTs === beforeTs && Date.now() - hit.at < STATS_TTL_MS) return hit.value;
+  let value = null;
+  try {
+    const stat = fs.statSync(file);
+    const key = stat.size + ':' + stat.mtimeMs;
+    if (hit && hit.key === key && hit.beforeTs === beforeTs) {
+      value = hit.value;
+    } else {
+      const t = tailTranscript(file);
+      if (t.exists) {
+        value = t.entries
+          .filter(
+            (en) =>
+              (en.kind === 'user' || en.kind === 'text' || en.kind === 'tool') &&
+              en.ts &&
+              (!beforeTs || en.ts < beforeTs)
+          )
+          .slice(-REPLAY_MAX_ENTRIES);
+        if (!value.length) value = null;
+      }
+    }
+    replayCache.set(file, { at: Date.now(), key, beforeTs, value });
+  } catch (_) {
+    replayCache.set(file, { at: Date.now(), key: null, beforeTs, value: null });
+  }
+  return value;
+}
+
+module.exports = { tailTranscript, sessionStats, agentMeta, sessionReplay };

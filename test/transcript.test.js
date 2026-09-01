@@ -143,3 +143,47 @@ test('agentMeta: falls back to the first user message when no .meta.json exists'
 test('agentMeta: missing transcript returns null (retry later, not cached)', () => {
   assert.equal(agentMeta(path.join(tmp, 'ghost.jsonl')), null);
 });
+
+test('user prompts are parsed as entries; meta/command/system noise is skipped', () => {
+  const { sessionReplay } = require('../plugins/golden-eye/server/transcript');
+  const file = writeTranscript([
+    { type: 'user', timestamp: '2026-09-01T09:00:00Z', message: { content: 'plain string prompt' } },
+    { type: 'user', timestamp: '2026-09-01T09:00:01Z', message: { content: [{ type: 'text', text: 'block prompt' }] } },
+    { type: 'user', timestamp: '2026-09-01T09:00:02Z', isMeta: true, message: { content: [{ type: 'text', text: 'meta noise' }] } },
+    { type: 'user', timestamp: '2026-09-01T09:00:03Z', message: { content: [{ type: 'text', text: '<command-name>/pm</command-name>' }] } },
+    { type: 'user', timestamp: '2026-09-01T09:00:04Z', message: { content: [{ type: 'text', text: 'Caveat: The messages below were generated…' }] } },
+    { type: 'user', timestamp: '2026-09-01T09:00:05Z', message: { content: [{ type: 'text', text: '<system-reminder>noise</system-reminder>' }] } },
+  ]);
+  const users = tailTranscript(file).entries.filter((e) => e.kind === 'user');
+  assert.deepEqual(users.map((e) => e.text), ['plain string prompt', 'block prompt']);
+  assert.ok(sessionReplay); // export exists
+});
+
+test('sessionReplay: only entries strictly older than the boundary; feed kinds only', () => {
+  const { sessionReplay } = require('../plugins/golden-eye/server/transcript');
+  const file = writeTranscript([
+    { type: 'user', timestamp: '2026-09-01T09:00:00Z', message: { content: 'old prompt' } },
+    assistant({ timestamp: '2026-09-01T09:00:01Z', message: { content: [
+      { type: 'thinking', thinking: 'hidden' },
+      { type: 'text', text: 'old answer' },
+      { type: 'tool_use', name: 'Bash', input: { command: 'ls' } },
+    ] } }),
+    { type: 'user', timestamp: '2026-09-01T09:00:02Z', message: { content: [{ type: 'tool_result', content: 'out' }] } },
+    { type: 'user', timestamp: '2026-09-01T11:00:00Z', message: { content: 'post-resume prompt (live-hooked)' } },
+  ]);
+  const replay = sessionReplay(file, '2026-09-01T10:00:00.000Z');
+  assert.deepEqual(replay.map((e) => [e.kind, e.text ?? e.name]), [
+    ['user', 'old prompt'],
+    ['text', 'old answer'],
+    ['tool', 'Bash'],
+  ]); // thinking + tool_result excluded; post-boundary prompt excluded
+});
+
+test('sessionReplay: fresh session (no pre-boundary history) yields null', () => {
+  const { sessionReplay } = require('../plugins/golden-eye/server/transcript');
+  const file = writeTranscript([
+    { type: 'user', timestamp: '2026-09-01T11:00:00Z', message: { content: 'first live prompt' } },
+  ]);
+  assert.equal(sessionReplay(file, '2026-09-01T10:00:00.000Z'), null);
+  assert.equal(sessionReplay(path.join(tmp, 'missing.jsonl'), '2026-09-01T10:00:00.000Z'), null);
+});

@@ -189,6 +189,11 @@ delegation stats on the dashboard.
   (+ legacy `TodoWrite`) events are the fallback when no store dir exists.
 - Denied calls appear as `PRE` rows without `POST` (Pre-without-Post = denial signal).
 - `startSource: null` means the session was observed without a `SessionStart` (attached mid-stream).
+- **Resume backfill**: history from before the hooks were watching (resumes,
+  mid-stream attaches) is read from the session transcript and shown as dimmed
+  `replayed` rows in the Live feed (last 150 prompt/output/tool entries), and
+  hydrates the last-prompt/last-output panels. Hook-level detail (permission
+  decisions, PM denies, exact payloads) is not reconstructable for those turns.
 - PM enforcement discriminates main session vs subagent by the presence of
   `agent_id` in PreToolUse payloads (verified against Claude Code ≥ 2.x via the
   probe rig). The failure polarity is safe — a payload-shape change can only

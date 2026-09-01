@@ -18,6 +18,8 @@ interface Entry {
   ts: string;
   emphasis?: boolean; // red rows (denials, blocked)
   toolUseId?: string; // PreToolUse rows: for in-flight detection
+  replayed?: boolean; // transcript backfill rows (dimmed, pre-observation history)
+  key?: string;       // stable key override for rows without a server __seq
 }
 
 function toEntry(e: HookEvent, nameFor: (id: string) => string): Entry | null {
@@ -241,7 +243,24 @@ export default function LiveFeed({ session, events, now }: { session: SessionInf
     if (!d) return `agent ${id.slice(0, 6)}`;
     return d.length > 34 ? `${d.slice(0, 34)}…` : d;
   };
-  const entries = events.map((e) => toEntry(e, nameFor)).filter(Boolean) as Entry[];
+  // Resume backfill: transcript history from before the hooks were watching,
+  // prepended chronologically and rendered dimmed. Static list ⇒ stable keys.
+  const replayEntries: Entry[] = (session.replay ?? []).map((r, idx) => {
+    // Shape the payload in EventDetail's vocabulary so expanding a replayed
+    // row shows the prompt/message/tool input, not just raw JSON.
+    const payload =
+      r.kind === 'user' ? { prompt: r.text }
+      : r.kind === 'tool' ? { tool_input: r.input ?? undefined }
+      : { last_assistant_message: r.text };
+    const event: HookEvent = { __ts: r.ts ?? '', __hook: 'Replay', payload };
+    const base = { raw: r, event, ts: event.__ts, replayed: true, key: `replay:${idx}` };
+    if (r.kind === 'user')
+      return { ...base, icon: MessageSquare, tone: 'text-sky-400', label: 'prompt', summary: (r.text ?? '').slice(0, 200) };
+    if (r.kind === 'tool')
+      return { ...base, icon: TerminalSquare, tone: 'text-zinc-400', label: `main · ${r.name ?? '?'}`, summary: r.input ? String(Object.values(r.input)[0] ?? '') : '' };
+    return { ...base, icon: Bot, tone: 'text-zinc-400', label: 'output', summary: (r.text ?? '').slice(0, 200) };
+  });
+  const entries = [...replayEntries, ...(events.map((e) => toEntry(e, nameFor)).filter(Boolean) as Entry[])];
 
   // In-flight detection: a fresh PreToolUse with no matching PostToolUse is a
   // tool call still executing — the terminal shows a spinner; so should we.
@@ -293,13 +312,16 @@ export default function LiveFeed({ session, events, now }: { session: SessionInf
             const Icon = en.icon;
             return (
               <details
-                key={en.event.__seq ?? `${en.ts}:${en.label}:${i}`}
-                className={`group rounded-lg px-2 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-900 ${en.emphasis ? 'bg-red-50 dark:bg-red-950/30' : ''}`}
+                key={en.key ?? en.event.__seq ?? `${en.ts}:${en.label}:${i}`}
+                className={`group rounded-lg px-2 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-900 ${en.emphasis ? 'bg-red-50 dark:bg-red-950/30' : ''} ${en.replayed ? 'opacity-60' : ''}`}
               >
                 <summary className="flex cursor-pointer list-none items-baseline gap-2.5 [&::-webkit-details-marker]:hidden">
                   <span className="w-14 shrink-0 text-[11px] text-zinc-400 tabular-nums">{clock(en.ts)}</span>
                   <Icon size={13} className={`relative top-0.5 shrink-0 ${en.tone}`} />
                   <span className={`shrink-0 text-xs font-medium ${en.emphasis ? 'text-red-600 dark:text-red-400' : ''}`}>{en.label}</span>
+                  {en.replayed && (
+                    <span className="shrink-0 rounded-full bg-zinc-100 px-1.5 text-[10px] font-medium text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500">replayed</span>
+                  )}
                   {isRunning(en) && (
                     <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-1.5 text-[10px] font-medium text-emerald-700 tabular-nums dark:bg-emerald-950 dark:text-emerald-300">
                       <span className="h-1 w-1 rounded-full bg-emerald-500 pulse-dot" /> running {fmtDur(now - Date.parse(en.ts))}

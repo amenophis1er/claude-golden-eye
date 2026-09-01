@@ -11,7 +11,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const Store = require('./state');
-const { tailTranscript, sessionStats, agentMeta } = require('./transcript');
+const { tailTranscript, sessionStats, agentMeta, sessionReplay } = require('./transcript');
 const { tasksForSession } = require('./tasks');
 const config = require('./config');
 
@@ -223,6 +223,23 @@ const server = http.createServer(async (req, res) => {
         const tasks = tasksForSession(sess.id, sess.transcriptPath);
         if (tasks) sess.todos = tasks;
         sess.env = sessionStats(sess.transcriptPath); // branch/model/tokens/context
+        // Resume backfill: transcript history older than our first observed
+        // event, rendered by the UI as dimmed "replayed" rows. Also hydrates
+        // the last-prompt/last-output panels that hooks haven't filled yet.
+        const replay = sessionReplay(sess.transcriptPath, sess.startedAt);
+        if (replay) {
+          sess.replay = replay;
+          if (!sess.lastPrompt) {
+            for (let i = replay.length - 1; i >= 0; i--) {
+              if (replay[i].kind === 'user') { sess.lastPrompt = replay[i].text; break; }
+            }
+          }
+          if (!sess.lastResult) {
+            for (let i = replay.length - 1; i >= 0; i--) {
+              if (replay[i].kind === 'text') { sess.lastResult = replay[i].text; break; }
+            }
+          }
+        }
         // Agents observed only from their tail (spawn predates a resume)
         // have no description — recover it from their own transcript.
         for (const a of sess.agents) {
