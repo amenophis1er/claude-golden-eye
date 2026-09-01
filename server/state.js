@@ -415,7 +415,16 @@ class Store {
         // tagged tool event (they arrive before SubagentStop). Reuse it so we
         // keep its delegation prompt/startedAt instead of overwriting.
         let a = s.agents['agent:' + (p.agent_id || '')];
-        if (!a) a = this.bindAgent(s, p.agent_id || 'unknown:' + e.__ts);
+        if (!a) {
+          // CC's internal ephemeral helpers (background-task watchers etc.)
+          // emit SubagentStop with an agent_transcript_path that is never
+          // written to disk. Binding one would steal a pending spawn slot
+          // from a real subagent and close it at 0.0s — drop it instead.
+          const real =
+            p.agent_transcript_path && fs.existsSync(p.agent_transcript_path);
+          if (!real) break;
+          a = this.bindAgent(s, p.agent_id || 'unknown:' + e.__ts);
+        }
         if (p.agent_type) a.type = p.agent_type;
         a.status = 'done';
         a.endedAt = e.__ts;

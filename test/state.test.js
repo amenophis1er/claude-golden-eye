@@ -284,3 +284,31 @@ test('SessionEnd closes out agents still marked running (teardown emits no stop)
   assert.equal(session(store).agents['agent:Z1'].status, 'done');
   assert.ok(session(store).agents['agent:Z1'].endedAt);
 });
+
+test('phantom SubagentStop (transcript never written) is dropped, not bound', () => {
+  const store = freshStore();
+  add(store, 'PreToolUse', { tool_name: 'Agent', tool_use_id: 't_real', tool_input: { description: 'real work', prompt: 'do it' } });
+  // CC internal helper: empty agent_type, transcript path that never exists
+  add(store, 'SubagentStop', {
+    agent_id: 'phantom1',
+    agent_type: '',
+    agent_transcript_path: '/nonexistent/subagents/agent-phantom1.jsonl',
+    last_assistant_message: 'run the drill',
+  });
+  const s = session(store);
+  assert.equal(s.agents['agent:phantom1'], undefined, 'no roster record for the phantom');
+  assert.equal(s.agents['spawn:t_real'].status, 'starting', 'pending spawn slot not stolen');
+  // the real child still binds to its slot afterwards
+  add(store, 'PreToolUse', { tool_name: 'Bash', tool_input: {}, agent_id: 'real1' });
+  assert.equal(s.agents['agent:real1'].prompt, 'do it');
+});
+
+test('tool-less real agent still binds at stop when its transcript exists', () => {
+  const store = freshStore();
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ge-test-'));
+  const tp = path.join(dir, 'agent-quiet1.jsonl');
+  fs.writeFileSync(tp, '');
+  add(store, 'SubagentStop', { agent_id: 'quiet1', agent_type: 'Explore', agent_transcript_path: tp, last_assistant_message: 'ok' });
+  assert.equal(session(store).agents['agent:quiet1'].status, 'done');
+  fs.rmSync(dir, { recursive: true, force: true });
+});

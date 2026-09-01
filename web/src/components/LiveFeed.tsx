@@ -234,7 +234,10 @@ export default function LiveFeed({ session, events, now }: { session: SessionInf
   // (what the human actually tracks), falling back to the short id.
   const nameFor = (id: string) => {
     const a = session.agents.find((x) => x.id === id);
-    const d = a?.description;
+    // No roster record at all: an internal CC helper (its transcript is
+    // never written), not one of our delegated subagents.
+    if (!a) return `internal helper ${id.slice(0, 6)}`;
+    const d = a.description;
     if (!d) return `agent ${id.slice(0, 6)}`;
     return d.length > 34 ? `${d.slice(0, 34)}…` : d;
   };
