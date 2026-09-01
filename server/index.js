@@ -11,7 +11,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const Store = require('./state');
-const { tailTranscript, sessionStats } = require('./transcript');
+const { tailTranscript, sessionStats, agentDescription } = require('./transcript');
 const { tasksForSession } = require('./tasks');
 const config = require('./config');
 
@@ -203,6 +203,16 @@ const server = http.createServer(async (req, res) => {
         const tasks = tasksForSession(sess.id, sess.transcriptPath);
         if (tasks) sess.todos = tasks;
         sess.env = sessionStats(sess.transcriptPath); // branch/model/tokens/context
+        // Agents observed only from their tail (spawn predates a resume)
+        // have no description — recover it from their own transcript.
+        for (const a of sess.agents) {
+          if (!a.mainAgent && !a.description && a.id && sess.transcriptPath) {
+            const f =
+              a.transcriptPath ||
+              sess.transcriptPath.replace(/\.jsonl$/, '') + '/subagents/agent-' + a.id + '.jsonl';
+            a.description = agentDescription(f);
+          }
+        }
       }
       return sendJson(res, 200, snapshot);
     }

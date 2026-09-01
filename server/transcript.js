@@ -161,4 +161,42 @@ function sessionStats(file) {
   return value;
 }
 
-module.exports = { tailTranscript, sessionStats };
+// ---------- delegation-prompt backfill ----------
+// When the spawn event was never observed (agent born before a resume),
+// the agent's own transcript still opens with the delegation prompt.
+const promptCache = new Map(); // file -> first-line description
+
+function agentDescription(file) {
+  if (!file) return null;
+  if (promptCache.has(file)) return promptCache.get(file);
+  let fd = null;
+  try {
+    fd = fs.openSync(file, 'r');
+    const buf = Buffer.alloc(16384);
+    const n = fs.readSync(fd, buf, 0, buf.length, 0);
+    for (const line of buf.toString('utf8', 0, n).split('\n')) {
+      if (!line.trim()) continue;
+      let j;
+      try {
+        j = JSON.parse(line);
+      } catch (_) {
+        continue;
+      }
+      if (j.type === 'user' && j.message) {
+        const text = flattenContent(j.message.content).trim();
+        if (text) {
+          const desc = SNIP(text.split('\n')[0], 140);
+          promptCache.set(file, desc);
+          return desc;
+        }
+      }
+    }
+  } catch (_) {
+    return null; // transcript missing/partial — retry on a later request
+  } finally {
+    if (fd != null) try { fs.closeSync(fd); } catch (_) {}
+  }
+  return null;
+}
+
+module.exports = { tailTranscript, sessionStats, agentDescription };
