@@ -30,7 +30,7 @@ function AgentDetail({ a, now, sessionId }: { a: AgentInfo; now: number; session
   if (!a.mainAgent && a.id) meta.push(['id', shortId(a.id)]);
   if (a.model) meta.push(['requested model', a.model]);
   if (a.startedAt) meta.push(['started', relTime(a.startedAt, now)]);
-  if (a.durationMs != null) meta.push(['duration', fmtDur(a.durationMs)]);
+  if (a.durationMs != null && a.status !== 'running') meta.push(['duration', fmtDur(a.durationMs)]);
   if (a.lastTool) meta.push(['last tool', a.lastTool]);
   meta.push(['tool events', String(a.toolEvents)]);
 

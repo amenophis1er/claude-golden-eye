@@ -281,6 +281,7 @@ class Store {
           if (!a.mainAgent && (a.status === 'starting' || a.status === 'done')) {
             a.status = 'running';
             a.endedAt = null;
+            a.durationMs = null; // stale from the previous stop of a resumed agent
           }
           a.lastTool = tool;
           a.lastToolAt = e.__ts;
