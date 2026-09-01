@@ -32,6 +32,7 @@ export interface SessionInfo {
   lastPromptAt: string | null;
   lastActivity: string;
   state: 'active' | 'working' | 'idle' | 'ended';
+  startSource: string | null;
   permissionMode: string | null;
   pmMode: boolean;
   mission: string | null;

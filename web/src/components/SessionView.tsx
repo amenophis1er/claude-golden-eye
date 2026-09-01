@@ -1,4 +1,4 @@
-import { Activity, Bot, Crown, GitBranch, Radio, ScrollText, Target } from 'lucide-react';
+import { Activity, Bot, Crown, GitBranch, GitFork, Radio, ScrollText, Target } from 'lucide-react';
 import type { HookEvent, SessionInfo } from '../lib/types';
 import { navigate, type Tab } from '../lib/router';
 import { baseName, fmtTokens, relTime, shortId } from '../lib/format';
@@ -65,6 +65,12 @@ export default function SessionView({ session: s, events, tab, sub, now }: {
           {s.pmMode && (
             <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-400/10 dark:text-amber-300">
               <Crown size={11} /> PM engaged
+            </span>
+          )}
+          {s.startSource === 'fork' && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-medium text-violet-800 dark:bg-violet-400/10 dark:text-violet-300"
+              title="forked from another session — background agent runner">
+              <GitFork size={11} /> fork
             </span>
           )}
           {s.pmMode && s.subModel && (

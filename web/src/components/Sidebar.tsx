@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Eye, Crown, X, Trash2 } from 'lucide-react';
+import { Eye, Crown, GitFork, X, Trash2 } from 'lucide-react';
 import type { DashState, SessionInfo } from '../lib/types';
 import { pruneSessions } from '../lib/useDashboard';
 import { navigate, type Tab } from '../lib/router';
@@ -48,6 +48,7 @@ function Row({ s, now, selected, tab }: { s: SessionInfo; now: number; selected:
         <div className="flex items-center gap-1.5 truncate font-medium">
           {baseName(s.cwd)}
           {s.pmMode && <Crown size={12} className="shrink-0 text-amber-500" />}
+          {s.startSource === 'fork' && <GitFork size={11} className="shrink-0 text-violet-400" title="forked session (background agent runner)" />}
         </div>
         <div className="truncate text-xs text-zinc-500">
           {shortId(s.id)} · {relTime(s.lastActivity, now)}
