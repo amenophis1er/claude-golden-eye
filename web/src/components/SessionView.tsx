@@ -99,7 +99,17 @@ export default function SessionView({ session: s, events, tab, sub, now }: {
             <span className="rounded bg-violet-100 px-1.5 font-mono text-[11px] text-violet-700 dark:bg-violet-400/10 dark:text-violet-300">{s.env.model}</span>
           )}
           {s.env?.contextTokens != null && (
-            <span title="tokens in the last request's context (input + cache)">ctx {fmtTokens(s.env.contextTokens)}</span>
+            <span
+              title={`tokens in the last request's context (input + cache)${s.env.contextWindow ? ` · window ~${fmtTokens(s.env.contextWindow)} (inferred)` : ''}`}
+              className={
+                s.env.contextWindow && s.env.contextTokens / s.env.contextWindow > 0.8
+                  ? 'font-medium text-amber-600 dark:text-amber-400'
+                  : undefined
+              }
+            >
+              ctx {fmtTokens(s.env.contextTokens)}
+              {s.env.contextWindow ? ` · ${Math.round((s.env.contextTokens / s.env.contextWindow) * 100)}%` : ''}
+            </span>
           )}
           {s.env && (
             <span title={`main-session tokens${s.env.usageApprox ? ' (recent tail only)' : ''} · cache read ${fmtTokens(s.env.usage.cacheRead)}`}>

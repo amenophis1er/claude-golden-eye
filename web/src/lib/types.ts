@@ -47,6 +47,7 @@ export interface SessionInfo {
     branch: string | null;
     version: string | null;
     contextTokens: number | null;
+    contextWindow?: number | null;
     usage: { in: number; cacheRead: number; out: number };
     usageApprox: boolean;
   } | null;

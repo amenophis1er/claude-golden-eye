@@ -55,6 +55,7 @@ function parseLine(line, entries, meta) {
       // Context size ≈ everything the last request carried in.
       meta.contextTokens =
         (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0);
+      if (meta.contextTokens > meta.maxContext) meta.maxContext = meta.contextTokens;
     }
     for (const c of msg.content) {
       if (!c || typeof c !== 'object') continue;
@@ -111,7 +112,13 @@ function tailTranscript(file) {
 }
 
 function newMeta() {
-  return { model: null, branch: null, version: null, contextTokens: null, usage: { in: 0, cacheRead: 0, out: 0 } };
+  return { model: null, branch: null, version: null, contextTokens: null, maxContext: 0, usage: { in: 0, cacheRead: 0, out: 0 } };
+}
+
+// Claude Code sessions run a 200k or 1M window; no transcript field states
+// which, but a context high-water mark beyond ~190k proves the 1M tier.
+function inferWindow(maxContext) {
+  return maxContext > 190_000 ? 1_000_000 : 200_000;
 }
 
 // ---------- session-level stats (header enrichment) ----------
@@ -148,6 +155,7 @@ function sessionStats(file) {
         branch: meta.branch,
         version: meta.version,
         contextTokens: meta.contextTokens,
+        contextWindow: inferWindow(meta.maxContext),
         usage: meta.usage,
         usageApprox: start > 0,
       };
