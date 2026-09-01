@@ -16,6 +16,9 @@ function groupOf(s: SessionInfo, now: number): 'active' | 'idle' | 'stale' {
   const age = now - Date.parse(s.lastActivity);
   if ((s.state === 'working' || s.state === 'active') && age < ACTIVE_FRESH_MS) return 'active';
   if (s.state === 'ended' || age > STALE_MS) return 'stale';
+  // Empty husks (viewer forks, aborted startups: no prompt, no tool calls)
+  // shouldn't linger in Idle — stale after 10 quiet minutes.
+  if (!s.lastPrompt && s.stats.toolCalls === 0 && age > 10 * 60 * 1000) return 'stale';
   return 'idle';
 }
 
