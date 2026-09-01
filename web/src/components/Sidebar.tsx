@@ -48,7 +48,11 @@ function Row({ s, now, selected, tab }: { s: SessionInfo; now: number; selected:
         <div className="flex items-center gap-1.5 truncate font-medium">
           {baseName(s.cwd)}
           {s.pmMode && <Crown size={12} className="shrink-0 text-amber-500" />}
-          {s.startSource === 'fork' && <GitFork size={11} className="shrink-0 text-violet-400" title="forked session (background agent runner)" />}
+          {s.startSource === 'fork' && (
+            <span title="forked session (background agent runner)" className="shrink-0">
+              <GitFork size={11} className="text-violet-400" />
+            </span>
+          )}
         </div>
         <div className="truncate text-xs text-zinc-500">
           {shortId(s.id)} · {relTime(s.lastActivity, now)}
