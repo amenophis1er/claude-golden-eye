@@ -13,7 +13,7 @@
  * Every call fails soft: discipline must never break a session.
  */
 
-const { resolveServerUrl } = require('./logger');
+const { resolveServerUrl } = require('./util');
 
 const PM_BLOCKED_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 

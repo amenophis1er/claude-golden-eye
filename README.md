@@ -1,14 +1,21 @@
 # claude golden-eye
 
-A Claude Code plugin that gives you a **live local dashboard** of what your sessions are
-really doing — every agent spawned, every delegation, every blocked write — plus **PM-mode
-discipline**: the main agent becomes a project manager that delegates instead of implementing,
-re-anchored on every prompt, with hard hook enforcement.
+A **live local dashboard** of what your Claude Code sessions are really doing —
+every agent spawned, every delegation, every tool call, live transcripts, plan,
+token/context usage. **View-only and passive**: the hooks observe, never
+intervene, and the server has zero runtime dependencies.
 
-- **Observer** — hooks → singleton local server → real-time web UI (agent tree, timeline, plan board)
-- **PM discipline** — `/pm on` charter, per-prompt re-anchor, hook-enforced delegation
-- **Agent self-reporting** — MCP `report_progress` / `get_mission`, progress bar, blocker detection
-- **Walk-away mode** — desktop notifications when agents finish or missions block
+This repo is a marketplace shipping **two independent plugins**:
+
+- **`golden-eye`** (the observer) — passive hooks → singleton local server →
+  real-time web UI (agent tree, live transcripts, timeline, plan board), plus
+  MCP `report_progress` / `get_mission` self-reporting and desktop
+  notifications when agents finish or missions block.
+- **`golden-eye-pm`** (optional add-on) — PM-mode discipline: `/pm` turns the
+  main session into a delegate-only project manager (charter + per-prompt
+  re-anchor, hook-enforced write blocking, subagent model pinning). Composes
+  with the observer for state and dashboard display; the observer never
+  requires it.
 
 Status: **M0–M3 complete and empirically verified.** Spec: [SPEC.md](SPEC.md) ·
 Probe evidence: [probe/FINDINGS.md](probe/FINDINGS.md)
@@ -17,18 +24,19 @@ Probe evidence: [probe/FINDINGS.md](probe/FINDINGS.md)
 
 ## Install locally (no publishing)
 
-The repo is a self-contained single-plugin marketplace.
+The repo is a self-contained marketplace.
 
 ```bash
 # from this repo's directory
 claude plugin marketplace add "$PWD"
-claude plugin install claude-golden-eye@claude-golden-eye
+claude plugin install golden-eye@claude-golden-eye        # the dashboard
+claude plugin install golden-eye-pm@claude-golden-eye     # optional PM mode
 claude plugin list                 # verify
 ```
 
-- Updates after edits: `claude plugin update claude-golden-eye` (then restart sessions).
-- Disable/enable without uninstalling: `claude plugin disable|enable claude-golden-eye`.
-- Remove: `claude plugin uninstall claude-golden-eye` and
+- Updates after edits: `claude plugin update golden-eye` (then restart sessions).
+- Disable/enable without uninstalling: `claude plugin disable|enable golden-eye`.
+- Remove: `claude plugin uninstall golden-eye` (same for `golden-eye-pm`) and
   `claude plugin marketplace remove claude-golden-eye`.
 - Note: the marketplace source is this directory. After code edits run
   `claude plugin marketplace update claude-golden-eye` (or reinstall) so the
@@ -50,7 +58,7 @@ Optional history migration (dev sessions live in the repo's store):
 6. Try `/pm off` when done. Toggle dashboard tabs across multiple open sessions via the
    session chips (N sessions ⇒ 1 window).
 
-## PM mode
+## PM mode (`golden-eye-pm` plugin)
 
 ```
 /pm on — MISSION: ship the payments refactor; subagents only
@@ -58,7 +66,9 @@ Optional history migration (dev sessions live in the repo's store):
 /pm off
 ```
 
-(The namespaced form `/claude-golden-eye:pm …` works identically.)
+(The namespaced form `/golden-eye-pm:pm …` works identically. `/pm` ships as a
+skill in the PM plugin; the raw prompt text is what its UserPromptSubmit hook
+parses, so it works even before the skill expands.)
 
 - The hook flips dashboard state and injects the **PM charter**; every later prompt gets a
   short **re-anchor** (mission + team status + rules) — the main agent can't lose the plot
@@ -75,7 +85,7 @@ Optional history migration (dev sessions live in the repo's store):
 
 ## Agent self-reporting (MCP)
 
-Bundled MCP server (`server/mcp-server.js`, zero-dependency stdio JSON-RPC):
+Bundled MCP server (`plugins/golden-eye/server/mcp-server.js`, zero-dependency stdio JSON-RPC):
 
 - `report_progress({ state: working|blocked|done, progress_pct?, note? })` — agents report
   milestones; call once before finishing per the PM charter. Resolves session by cwd.
@@ -95,7 +105,7 @@ PM write blocked · mission blocked · turn ended.
 
 ```
 any session's SessionStart hook
-  └── node server/boot.js
+  └── node plugins/golden-eye/server/boot.js
         ├─ server.json healthy?            → do nothing (reuse)
         ├─ healthz probe on 7717–7721?     → reuse, do nothing
         └─ else: exclusive lockfile + spawn ONE detached server
@@ -105,7 +115,7 @@ idle 30 min + no dashboard open  →  server shuts itself down
 ```
 
 Default data dir: `~/.golden-eye/` (all projects converge). Manual run stays available:
-`node server/index.js`.
+`node plugins/golden-eye/server/index.js`.
 
 ## Dashboard tour
 
@@ -130,19 +140,32 @@ Default data dir: `~/.golden-eye/` (all projects converge). Manual run stays ava
 ## Architecture
 
 ```
-hooks/   (one thin process per Claude hook event, fail-soft)
-  ├── JSONL log .probe/hook-events.jsonl   (fallback, always)
-  └── POST /ingest → server (port from server.json, best-effort)
-server/  singleton node process (zero runtime dependencies)
-  ├── index.js       HTTP ingest + /pm bridge + /mcp/attach + /api/prune
-  │                  + /api/agent-transcript + SSE + static hosting (web/dist)
-  ├── state.js       event store + reducer (sessions, agents, tasks) — replay on boot
-  ├── transcript.js  passive JSONL tail: per-agent transcripts, usage/branch/model stats
-  ├── tasks.js       reads Claude Code's task store (<config>/tasks/<session>/*.json)
-  ├── mcp-server.js  stdio JSON-RPC (report_progress, get_mission)
-  └── boot.js        idempotent singleton bootstrap (SessionStart, stale-lock safe)
-web/     React + Vite + Tailwind dashboard (src/ → committed dist/, no build for users)
+plugins/golden-eye/            THE OBSERVER (view-only)
+  hooks/   (one thin logging process per Claude hook event, fail-soft)
+    ├── JSONL log .probe/hook-events.jsonl   (fallback, always)
+    └── POST /ingest → server (port from server.json, best-effort)
+  server/  singleton node process (zero runtime dependencies)
+    ├── index.js       HTTP ingest + /pm bridge + /mcp/attach + /api/prune
+    │                  + /api/agent-transcript + SSE + static hosting (web/dist)
+    ├── state.js       event store + reducer (sessions, agents, tasks) — replay on boot
+    ├── transcript.js  passive JSONL tail: per-agent transcripts, usage/branch/model stats
+    ├── tasks.js       reads Claude Code's task store (<config>/tasks/<session>/*.json)
+    ├── mcp-server.js  stdio JSON-RPC (report_progress, get_mission)
+    └── boot.js        idempotent singleton bootstrap (SessionStart, stale-lock safe)
+  web/     React + Vite + Tailwind dashboard (src/ → committed dist/, no build for users)
+
+plugins/golden-eye-pm/         PM DISCIPLINE (optional add-on)
+  skills/pm/SKILL.md   the /pm skill: charter instructions for the model
+  hooks/
+    ├── user-prompt-submit.js  /pm parse → engage/off/mission/--sub pin + charter inject
+    ├── pre-tool-use.js        main-session write deny + subagent model pin (updatedInput)
+    └── lib/pm.js, lib/util.js server bridge (fail-open when no observer server exists)
 ```
+
+The plugins are independent: the observer never reads PM code, and PM
+enforcement degrades gracefully (fail-open) when the observer's server is
+absent — installing both is what lights up the PM chips, deny counter, and
+delegation stats on the dashboard.
 
 ## Environment variables
 
@@ -169,7 +192,7 @@ web/     React + Vite + Tailwind dashboard (src/ → committed dist/, no build f
 ## Dashboard UI
 
 React + Vite + Tailwind (lucide icons, light/dark mode, hash-routed deep links like
-`#/s/<session>/agents`). The built app is committed at `web/dist/` and served by the
+`#/s/<session>/agents`). The built app is committed at `plugins/golden-eye/web/dist/` and served by the
 zero-dependency server — end users need no build step.
 
 - Sessions are grouped **Active / Idle / Stale** in the sidebar; stale ones can be
@@ -178,7 +201,7 @@ zero-dependency server — end users need no build step.
 - The **Live** tab is the realtime view: a "now" strip of running agents (current
   tool + elapsed), an auto-following event feed (click any row for the raw payload),
   and a full-height panel with the main agent's latest prompt/output.
-- UI development: `cd web && npm install && npm run dev` (Vite proxies `/api` + `/pm`
+- UI development: `cd plugins/golden-eye/web `cd web && npm install && npm run dev``cd web && npm install && npm run dev` npm install `cd web && npm install && npm run dev``cd web && npm install && npm run dev` npm run dev` (Vite proxies `/api` + `/pm`
   to `127.0.0.1:7717`). Ship with `npm run build` and commit `web/dist/`.
 
 ## Always-on server (launchd)
@@ -189,7 +212,7 @@ LaunchAgent that starts it at login and keeps it alive (idle-exit disabled via
 `GOLDEN_EYE_IDLE_EXIT_MS=0`):
 
 ```bash
-./deploy/install-launchd.sh   # writes the plist (node + repo paths resolved) and loads it
+./plugins/golden-eye/deploy/install-launchd.sh   # writes the plist (node + repo paths resolved) and loads it
 # remove:
 launchctl bootout gui/$(id -u)/com.golden-eye.server
 rm ~/Library/LaunchAgents/com.golden-eye.server.plist

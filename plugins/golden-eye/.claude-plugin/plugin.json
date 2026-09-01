@@ -1,0 +1,13 @@
+{
+  "name": "golden-eye",
+  "description": "Live, view-only oversight of Claude Code sessions: passive hooks feed a local dashboard (agents, transcripts, plan, tokens). Zero runtime dependencies; never alters a session.",
+  "version": "0.1.0",
+  "author": { "name": "amen" },
+  "keywords": ["monitoring", "hooks", "subagents", "observability", "dashboard"],
+  "mcpServers": {
+    "golden-eye": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/server/mcp-server.js"]
+    }
+  }
+}

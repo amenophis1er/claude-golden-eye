@@ -2,16 +2,18 @@
 'use strict';
 
 /**
- * UserPromptSubmit: Observer logging (always), plus
+ * UserPromptSubmit (PM plugin):
  *   /pm <mission>   -> engage PM mode, inject the PM charter
  *   /pm off         -> disengage
  *   (any prompt while engaged) -> re-anchor: mission + team status + rules
  *
  * Injection is context-only; the prompt itself still reaches the model.
- * All failures are soft: no server => no injection, logging still works.
+ * Observer logging lives in the golden-eye plugin — this hook only manages
+ * PM state. All failures are soft: no server => charter still injects from
+ * local parsing, but engaged-state persistence and team stats are skipped.
  */
 
-const { logStdinEvent, readStdinJson } = require('./lib/logger');
+const { readStdinJson } = require('./lib/util');
 const pm = require('./lib/pm');
 
 function inject(text) {
@@ -27,7 +29,6 @@ function inject(text) {
 
 async function main() {
   const payload = readStdinJson();
-  await logStdinEvent('UserPromptSubmit', payload);
 
   try {
     const sid = payload && payload.session_id;
@@ -35,21 +36,18 @@ async function main() {
     if (!sid) return;
 
     // /pm handling. Two entry paths:
-    //  1. real slash command: Claude Code expands commands/pm.md — we detect
-    //     the marker and parse $ARGUMENTS from `Arguments: "..."`.
-    //  2. raw "/pm ..." text if it ever reaches the hook unexpanded.
+    //  1. expanded skill/command text carrying the PM-MODE-COMMAND marker —
+    //     parse $ARGUMENTS from `Arguments: "..."` (case-insensitive: a
+    //     failed parse here used to turn "/pm off" into a re-engage).
+    //  2. raw "/pm ..." text: plugin commands reach this hook unexpanded, so
+    //     this is the path that fires in practice. Matches both "/pm ..."
+    //     and the namespaced "/golden-eye-pm:pm ...".
     let pmArgs = null;
     const marker = prompt.indexOf('PM-MODE-COMMAND');
     if (marker !== -1) {
-      // pm.md emits `User arguments: "..."` — match case-insensitively so the
-      // expanded-command path can never mis-parse (a failed parse here used to
-      // turn "/pm off" into an accidental re-engage).
       const m = prompt.match(/arguments:\s*"([\s\S]*)"/i);
       pmArgs = m ? m[1].trim() : '';
     } else if (/^\s*\/(?:[\w.-]+:)?pm\b/.test(prompt)) {
-      // Raw command text. Matches both "/pm ..." and the plugin-namespaced
-      // "/claude-golden-eye:pm ..." — plugin commands reach this hook as raw
-      // text (unexpanded), so this path is the one that fires in practice.
       pmArgs = prompt.replace(/^\s*\/(?:[\w.-]+:)?pm\b/, '').trim();
     }
 
@@ -82,7 +80,7 @@ async function main() {
       return inject(pm.reanchor(st, st.denies));
     }
   } catch (_) {
-    /* no injection on failure — observer behavior stays intact */
+    /* no injection on failure — the session proceeds undisciplined */
   }
 }
 

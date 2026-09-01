@@ -14,7 +14,7 @@ const path = require('path');
 
 // Point the store at a throwaway data dir BEFORE the config module loads.
 process.env.GOLDEN_EYE_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'golden-eye-test-'));
-const Store = require('../server/state');
+const Store = require('../plugins/golden-eye/server/state');
 
 const SID = 'sess-test';
 let tick = 0;

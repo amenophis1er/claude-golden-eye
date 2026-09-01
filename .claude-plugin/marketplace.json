@@ -1,12 +1,18 @@
 {
   "name": "claude-golden-eye",
   "owner": { "name": "amen" },
-  "description": "Local marketplace for the golden-eye plugin: live Claude Code session oversight + PM-mode discipline.",
+  "description": "golden-eye: live, view-only oversight of Claude Code sessions — plus an optional PM-mode discipline plugin that composes with it.",
   "plugins": [
     {
-      "name": "claude-golden-eye",
-      "source": "./",
-      "description": "Live session oversight + PM-mode discipline for Claude Code (hooks + MCP + dashboard)",
+      "name": "golden-eye",
+      "source": "./plugins/golden-eye",
+      "description": "Live session oversight: passive hooks + local dashboard (agents, transcripts, plan, tokens). View-only, zero runtime dependencies.",
+      "version": "0.1.0"
+    },
+    {
+      "name": "golden-eye-pm",
+      "source": "./plugins/golden-eye-pm",
+      "description": "Optional PM-mode discipline: /pm makes the main session delegate-only (hook-enforced writes block + subagent model pinning). Best with the golden-eye observer installed.",
       "version": "0.1.0"
     }
   ]

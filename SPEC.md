@@ -52,25 +52,25 @@ alone.
 
 ```
 claude-golden-eye/
-├── .claude-plugin/plugin.json   # incl. mcpServers registration (M3)
-├── hooks/                       # thin stdin-JSON → POST wrappers
-│   ├── hooks.json
-│   ├── lib/logger.js            # stdin→JSONL log + server POST bridge
-│   ├── lib/pm.js                # PM state bridge + charter/re-anchor texts
-│   ├── session-start.js
-│   ├── user-prompt-submit.js    # the re-anchor + /pm handling (V1 core)
-│   ├── pre-tool-use.js          # delegation enforcement (V1)
-│   ├── post-tool-use.js         # Task spawn capture
-│   ├── subagent-stop.js
-│   └── stop.js
-├── server/
-│   ├── boot.js                  # SessionStart singleton bootstrap (lock + healthz)
-│   ├── config.js
-│   ├── index.js                 # single process: ingest + PM API + SSE + static
-│   ├── state.js                 # sessions/agents/events reducer + JSONL replay
-│   └── mcp-server.js            # stdio JSON-RPC: report_progress / get_mission
-├── web/                         # React+Vite dashboard (src/ → committed dist/)
-├── commands/pm.md               # /pm → toggle manager mode
+├── .claude-plugin/marketplace.json  # lists both plugins
+├── plugins/golden-eye/          # THE OBSERVER (view-only)
+│   ├── .claude-plugin/plugin.json   # incl. mcpServers registration (M3)
+│   ├── hooks/                   # thin stdin-JSON → log+POST wrappers (all 7 events)
+│   │   ├── hooks.json
+│   │   └── lib/logger.js        # stdin→JSONL log + server POST bridge
+│   ├── server/
+│   │   ├── boot.js              # SessionStart singleton bootstrap (lock + healthz)
+│   │   ├── config.js
+│   │   ├── index.js             # single process: ingest + PM API + SSE + static
+│   │   ├── state.js             # sessions/agents/events reducer + JSONL replay
+│   │   └── mcp-server.js        # stdio JSON-RPC: report_progress / get_mission
+│   └── web/                     # React+Vite dashboard (src/ → committed dist/)
+├── plugins/golden-eye-pm/       # PM DISCIPLINE (optional add-on)
+│   ├── skills/pm/SKILL.md       # /pm → charter instructions for the model
+│   └── hooks/
+│       ├── user-prompt-submit.js  # /pm parse + charter/re-anchor inject (V1 core)
+│       ├── pre-tool-use.js        # write deny + subagent model pin (V1)
+│       └── lib/pm.js, lib/util.js # PM state bridge (fail-open without server)
 ├── test/state.test.js           # reducer tests — `node --test`
 └── SPEC.md
 ```
