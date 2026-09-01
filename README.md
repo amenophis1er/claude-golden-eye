@@ -240,7 +240,10 @@ a port squatter ever pushes the server to a fallback port, re-point the proxy.
 
 ## Development
 
-- `node --test` — reducer tests for `plugins/golden-eye/server/state.js` (agent FIFO binding + repair,
-  PM state, task mirroring, log rotation).
+- `npm test` — four suites: the state reducer (agent FIFO binding + repair, PM
+  state, task mirroring, log rotation), `/pm` prompt parsing (incl. regression
+  pins for both historical parsing bugs), the tolerant transcript parser
+  (usage sums, 200k/1M window inference), and endpoint integration against a
+  real server boot (agent-transcript path validation, static traversal).
 - The server self-identifies on `/healthz` (`name: "golden-eye"`); bootstrap only
   adopts servers that answer with it, so restart any pre-0.1.0 server after updating.
