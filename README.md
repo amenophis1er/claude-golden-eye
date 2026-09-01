@@ -50,8 +50,9 @@ Optional history migration (dev sessions live in the repo's store):
 1. Start any Claude Code session in any project. Its `SessionStart` hook bootstraps the
    dashboard automatically — nothing to launch.
 2. Open **http://127.0.0.1:7717** (the server logs its URL to stderr if the port moved).
-3. In the session, run `/pm on MISSION: …` — the dashboard shows `PM ENGAGED`, the mission,
-   and the charter the agent received.
+3. (With `golden-eye-pm` installed) run `/pm on MISSION: …` — the dashboard shows
+   `PM ENGAGED`, the mission, and the charter the agent received. Steps 3–4 are
+   PM-plugin features; the observer alone covers everything else here.
 4. Give the model a task that needs files. Expect it to **delegate**: main-agent writes are
    hook-denied with an explanatory reason; the dashboard gets a red `DENY` row and a counter.
 5. Subagents appear live in the agent tree (spawn prompt → tool calls → final report).
@@ -201,8 +202,9 @@ zero-dependency server — end users need no build step.
 - The **Live** tab is the realtime view: a "now" strip of running agents (current
   tool + elapsed), an auto-following event feed (click any row for the raw payload),
   and a full-height panel with the main agent's latest prompt/output.
-- UI development: `cd plugins/golden-eye/web `cd web && npm install && npm run dev``cd web && npm install && npm run dev` npm install `cd web && npm install && npm run dev``cd web && npm install && npm run dev` npm run dev` (Vite proxies `/api` + `/pm`
-  to `127.0.0.1:7717`). Ship with `npm run build` and commit `web/dist/`.
+- UI development: `cd plugins/golden-eye/web && npm install && npm run dev` (Vite
+  proxies `/api` + `/pm` to `127.0.0.1:7717`). Ship with `npm run build` and commit
+  `web/dist/`.
 
 ## Always-on server (launchd)
 
@@ -238,7 +240,7 @@ a port squatter ever pushes the server to a fallback port, re-point the proxy.
 
 ## Development
 
-- `node --test` — reducer tests for `server/state.js` (agent FIFO binding + repair,
+- `node --test` — reducer tests for `plugins/golden-eye/server/state.js` (agent FIFO binding + repair,
   PM state, task mirroring, log rotation).
 - The server self-identifies on `/healthz` (`name: "golden-eye"`); bootstrap only
   adopts servers that answer with it, so restart any pre-0.1.0 server after updating.
