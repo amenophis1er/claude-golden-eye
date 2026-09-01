@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Bot, CheckCircle2, ChevronDown, User } from 'lucide-react';
 import type { AgentInfo, SessionInfo } from '../lib/types';
 import { fmtDur, relTime, shortId } from '../lib/format';
@@ -34,10 +34,40 @@ function AgentDetail({ a, now, sessionId }: { a: AgentInfo; now: number; session
   if (a.lastTool) meta.push(['last tool', a.lastTool]);
   meta.push(['tool events', String(a.toolEvents)]);
 
+  const [leftW, setLeftW] = useState(() => {
+    const w = Number(localStorage.getItem('ge-agent-left-width'));
+    return w >= 240 && w <= 640 ? w : 320;
+  });
+  const leftWRef = useRef(leftW);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const startDrag = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const origin = rootRef.current?.getBoundingClientRect().left ?? 0;
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+    const onMove = (ev: PointerEvent) => {
+      const w = Math.min(640, Math.max(240, ev.clientX - origin));
+      leftWRef.current = w;
+      setLeftW(w);
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      localStorage.setItem('ge-agent-left-width', String(leftWRef.current));
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp, { once: true });
+  };
+
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4 lg:flex-row lg:gap-5">
+    <div
+      ref={rootRef}
+      className="flex h-full min-h-0 flex-col gap-4 lg:flex-row lg:gap-5"
+      style={{ '--agent-left-w': `${leftW}px` } as React.CSSProperties}
+    >
       {/* left: properties (stacks on top for narrow windows) */}
-      <div className="max-h-[45vh] shrink-0 overflow-y-auto pr-1 lg:max-h-none lg:w-80">
+      <div className="max-h-[45vh] shrink-0 overflow-y-auto pr-1 lg:max-h-none lg:w-[var(--agent-left-w)]">
         <div className="flex items-center gap-2.5">
           {a.mainAgent ? <User size={16} className="shrink-0 text-zinc-400" /> : <Bot size={16} className="shrink-0 text-violet-400" />}
           <span className="min-w-0 flex-1 text-sm font-semibold">
@@ -82,7 +112,13 @@ function AgentDetail({ a, now, sessionId }: { a: AgentInfo; now: number; session
         )}
       </div>
       {/* right: transcript */}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col border-zinc-200 lg:border-l lg:pl-5 dark:border-zinc-800">
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col border-zinc-200 lg:border-l lg:pl-5 dark:border-zinc-800">
+        {/* drag handle over the divider (desktop split only) */}
+        <div
+          onPointerDown={startDrag}
+          title="Drag to resize"
+          className="absolute top-0 left-0 z-10 hidden h-full w-1.5 -translate-x-1/2 cursor-col-resize transition-colors hover:bg-amber-400/50 active:bg-amber-500/60 lg:block"
+        />
         <div className="mb-1 flex items-center gap-2 text-xs font-medium text-zinc-500">
           {running && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 pulse-dot" />}
           {running ? 'live transcript' : 'transcript'}
