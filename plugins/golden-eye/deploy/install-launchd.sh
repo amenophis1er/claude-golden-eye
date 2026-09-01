@@ -5,6 +5,13 @@ set -e
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 NODE="$(command -v node)"
 [ -n "$NODE" ] || { echo "node not found in PATH" >&2; exit 1; }
+
+# Paths are interpolated into plist XML — escape the XML-special characters
+# so an '&' (or worse) in a directory name can't produce an invalid plist.
+xml_escape() { printf '%s' "$1" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g'; }
+NODE="$(xml_escape "$NODE")"
+REPO="$(xml_escape "$REPO")"
+ESC_HOME="$(xml_escape "$HOME")"
 PLIST="$HOME/Library/LaunchAgents/com.golden-eye.server.plist"
 mkdir -p "$HOME/Library/LaunchAgents" "$HOME/.golden-eye"
 
@@ -25,8 +32,8 @@ cat > "$PLIST" <<PLIST_EOF
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
-  <key>StandardOutPath</key><string>${HOME}/.golden-eye/launchd.log</string>
-  <key>StandardErrorPath</key><string>${HOME}/.golden-eye/launchd.log</string>
+  <key>StandardOutPath</key><string>${ESC_HOME}/.golden-eye/launchd.log</string>
+  <key>StandardErrorPath</key><string>${ESC_HOME}/.golden-eye/launchd.log</string>
 </dict>
 </plist>
 PLIST_EOF

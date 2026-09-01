@@ -77,6 +77,23 @@ test('regression: marker path matches `Arguments:` case-insensitively (off stays
   assert.deepEqual(parsePmPrompt(expanded), { action: 'off' });
 });
 
+test('regression: quotes later in the expanded skill body do not bleed into the mission', () => {
+  const expanded =
+    '[PM-MODE-COMMAND golden-eye]\nUser arguments: "on build a parser"\n\n' +
+    'You are the PM until the user says "/pm off". Follow the charter…';
+  assert.deepEqual(parsePmPrompt(expanded), { action: 'on', mission: 'build a parser', subModel: null });
+});
+
+test('quotes inside the args line itself survive', () => {
+  const expanded = '[PM-MODE-COMMAND golden-eye]\nUser arguments: "on fix the "parser" module"\n…';
+  assert.equal(parsePmPrompt(expanded).mission, 'fix the "parser" module');
+});
+
+test('regression: "on" prefix strips case-insensitively', () => {
+  assert.equal(parsePmPrompt('/pm ON ship it').mission, 'ship it');
+  assert.deepEqual(parsePmPrompt('/pm On'), { action: 'on', mission: '', subModel: null });
+});
+
 test('marker present but arguments unparseable ⇒ engage with empty mission, never mis-parse', () => {
   const p = parsePmPrompt('[PM-MODE-COMMAND golden-eye] no args line at all');
   assert.deepEqual(p, { action: 'on', mission: '', subModel: null });

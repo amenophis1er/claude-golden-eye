@@ -13,12 +13,15 @@ mkdir -p "$PROJ/.claude" "$LOG_DIR"
 # Clear any stale events from earlier runs so analysis sees this run only.
 rm -f "$LOG_DIR/hook-events.jsonl"
 
-node "$ROOT/probe/gen-settings.js" "$PROJ/.claude/settings.json" "$ROOT/hooks"
+node "$ROOT/probe/gen-settings.js" "$PROJ/.claude/settings.json" "$ROOT/plugins/golden-eye/hooks"
 echo "Wired probe hooks -> $PROJ/.claude/settings.json"
 
 PROMPT='Probe task: 1) Use TodoWrite to record a 4-item plan for this probe and mark the first item in_progress. 2) Create a file named main-agent-file.txt containing "written by the main agent". 3) Use the Agent tool (formerly Task) to spawn a general-purpose subagent that creates sub-agent-file-a.txt and sub-agent-file-b.txt, each containing "written by a subagent", then reports back. 4) When its work is done, mark all todos completed and reply with one short sentence summarizing what happened.'
 
 cd "$PROJ"
+# The logger defaults to the shared data dir; pin it to the rig's dir so
+# analyze.js reads exactly this run's events.
+export GOLDEN_EYE_LOG_DIR="$LOG_DIR"
 echo "Running probe session (claude -p, may take a minute)..."
 claude -p "$PROMPT" \
   --dangerously-skip-permissions \

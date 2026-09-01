@@ -41,14 +41,24 @@ async function main() {
     const parsed = parsePmPrompt(prompt);
     if (parsed) {
       if (parsed.action === 'off') {
-        await pm.setPm({ sessionId: sid, action: 'off' });
-        return inject('🟡 golden-eye: PM mode OFF. You are back to normal execution.');
+        const off = await pm.setPm({ sessionId: sid, action: 'off' });
+        return inject(
+          off
+            ? '🟡 golden-eye: PM mode OFF. You are back to normal execution.'
+            : '🟡 golden-eye: PM mode OFF (observer server unreachable — if it held engaged state, retry "/pm off" once it is back).'
+        );
       }
       const { mission, subModel } = parsed;
       const st = await pm.setPm({ sessionId: sid, action: 'on', mission, subModel });
       const state = st && st.pmMode ? st : { pmMode: true, mission, subModel, agents: [], denies: 0 };
       if (!state.subModel && subModel) state.subModel = subModel;
-      return inject(pm.charter(state.mission || mission, state));
+      let text = pm.charter(state.mission || mission, state);
+      if (!st || !st.pmMode) {
+        // Server unreachable: the charter still instructs, but the PreToolUse
+        // hook has no state to enforce with — don't claim protection we lack.
+        text += '\n⚠ observer server unreachable — hook enforcement is INACTIVE; the rules above are advisory until it returns.';
+      }
+      return inject(text);
     }
 
     // Re-anchor on every ordinary prompt while PM mode is engaged.

@@ -143,7 +143,7 @@ Default data dir: `~/.golden-eye/` (all projects converge). Manual run stays ava
 ```
 plugins/golden-eye/            THE OBSERVER (view-only)
   hooks/   (one thin logging process per Claude hook event, fail-soft)
-    ├── JSONL log .probe/hook-events.jsonl   (fallback, always)
+    ├── JSONL log <data dir>/logs/hook-events.jsonl   (fallback, always; size-capped)
     └── POST /ingest → server (port from server.json, best-effort)
   server/  singleton node process (zero runtime dependencies)
     ├── index.js       HTTP ingest + /pm bridge + /mcp/attach + /api/prune
@@ -178,6 +178,7 @@ delegation stats on the dashboard.
 | `GOLDEN_EYE_SERVER_URL` | from `server.json` | hook override |
 | `GOLDEN_EYE_IDLE_EXIT_MS` | 1 800 000 (30 min) | auto-exit (0 = never) |
 | `GOLDEN_EYE_NOTIFY` | on | set `0` to disable notifications |
+| `GOLDEN_EYE_LOG_DIR` | `<data dir>/logs` | hooks' fallback JSONL log location |
 | `GOLDEN_EYE_DISABLE_POST` | unset | `1` = local logging only |
 
 ## Known limits
@@ -188,6 +189,16 @@ delegation stats on the dashboard.
   (+ legacy `TodoWrite`) events are the fallback when no store dir exists.
 - Denied calls appear as `PRE` rows without `POST` (Pre-without-Post = denial signal).
 - `startSource: null` means the session was observed without a `SessionStart` (attached mid-stream).
+- PM enforcement discriminates main session vs subagent by the presence of
+  `agent_id` in PreToolUse payloads (verified against Claude Code ≥ 2.x via the
+  probe rig). The failure polarity is safe — a payload-shape change can only
+  over-block, never silently unblock the main session.
+- The `--sub` model-pin rewrite answers `permissionDecision: "allow"` for the
+  spawn it rewrites, so a pinned Agent/Task call bypasses any ask-rule you may
+  have configured on that tool.
+- The dashboard API is loopback-only and rejects non-local `Host` headers, but
+  has no auth: any process on the machine can read session data. Keep that in
+  mind before proxying it anywhere (see the Tailscale section).
 - Probe rig and findings for the original hook-payload discovery: [probe/](probe/).
 
 ## Dashboard UI

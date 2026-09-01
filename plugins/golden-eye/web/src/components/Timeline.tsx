@@ -51,7 +51,7 @@ export default function Timeline({ events }: { events: HookEvent[] }) {
       </div>
       <div className="flex-1 overflow-y-auto px-4 py-2">
         {[...shown].reverse().map((e, i) => (
-          <details key={i} className="rounded-lg px-2 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-900">
+          <details key={e.__seq ?? `${e.__ts}:${e.__hook}:${i}`} className="rounded-lg px-2 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-900">
             <summary className="flex cursor-pointer list-none items-baseline gap-2.5 [&::-webkit-details-marker]:hidden">
               <span className="w-14 shrink-0 text-[11px] text-zinc-400 tabular-nums">{clock(e.__ts)}</span>
               <span className={`w-32 shrink-0 truncate rounded-full px-2 py-0.5 text-center text-[10px] font-medium ${TONES[e.__hook] ?? 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'}`}>

@@ -1,6 +1,6 @@
 {
   "name": "claude-golden-eye",
-  "owner": { "name": "amen" },
+  "owner": { "name": "Amen", "url": "https://github.com/amenophis1er" },
   "description": "golden-eye: live, view-only oversight of Claude Code sessions — plus an optional PM-mode discipline plugin that composes with it.",
   "plugins": [
     {

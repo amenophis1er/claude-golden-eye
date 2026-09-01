@@ -57,6 +57,7 @@ export interface SessionInfo {
 export interface HookEvent {
   __ts: string;
   __hook: string;
+  __seq?: number; // server-assigned monotonic id — stable list keys
   payload: any;
 }
 

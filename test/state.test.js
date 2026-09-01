@@ -312,3 +312,28 @@ test('tool-less real agent still binds at stop when its transcript exists', () =
   assert.equal(session(store).agents['agent:quiet1'].status, 'done');
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('SessionPrune tombstone: straggler events do not resurrect; SessionStart does', () => {
+  const store = freshStore();
+  add(store, 'UserPromptSubmit', { prompt: 'hi' });
+  assert.ok(session(store));
+
+  add(store, 'SessionPrune', {});
+  assert.equal(session(store), undefined);
+
+  // A racing Stop (or replayed line) must not bring the session back.
+  add(store, 'Stop', { last_assistant_message: 'late' });
+  assert.equal(session(store), undefined);
+
+  // A genuine restart announces itself and lifts the tombstone.
+  add(store, 'SessionStart', { source: 'resume' });
+  assert.ok(session(store));
+});
+
+test('tool_name "__proto__" cannot corrupt per-agent tool counts', () => {
+  const store = freshStore();
+  add(store, 'PreToolUse', { tool_name: '__proto__', tool_input: {} });
+  const counts = session(store).agents.__main__.tools;
+  assert.equal(counts['__proto__'], 1);
+  assert.equal(JSON.parse(JSON.stringify(counts))['__proto__'], 1);
+});

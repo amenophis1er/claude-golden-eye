@@ -12,7 +12,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "*",
+        "matcher": "^(Edit|Write|MultiEdit|NotebookEdit|Task|Agent)$",
         "hooks": [
           {
             "type": "command",

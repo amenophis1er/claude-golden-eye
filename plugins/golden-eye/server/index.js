@@ -138,8 +138,28 @@ setInterval(() => {
   }
 }, 25_000).unref();
 
+// Host allowlist: the server is loopback-only, but browsers will happily send
+// requests to 127.0.0.1 on behalf of a hostile page via DNS rebinding (an
+// attacker domain resolving to 127.0.0.1 keeps the page same-origin with us).
+// Rejecting foreign Host headers closes that hole. Proxies that rewrite Host
+// (e.g. `tailscale serve`) present a loopback/localhost Host and still pass.
+function hostAllowed(hostHeader) {
+  if (!hostHeader) return true; // HTTP/1.0 or same-box tooling without Host
+  const name = hostHeader.replace(/:\d+$/, '').replace(/^\[|\]$/g, '').toLowerCase();
+  return (
+    name === '127.0.0.1' ||
+    name === 'localhost' ||
+    name === '::1' ||
+    name === HOST.toLowerCase()
+  );
+}
+
 const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host || HOST}`);
+  if (!hostAllowed(req.headers.host)) {
+    res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+    return res.end('forbidden host');
+  }
+  const url = new URL(req.url, `http://${HOST}`);
   try {
     if (req.method === 'POST' && url.pathname === '/ingest') {
       const ev = await readJsonBody(req);
@@ -356,15 +376,8 @@ function listenOn(index, pinnedPort) {
     console.error(`[golden-eye] no free port among ${config.PORT_CANDIDATES.join(', ')} — exiting`);
     process.exit(1);
   }
-  server.listen(port, HOST);
-  server.once('listening', () => {
-    writeServerFile(port);
-    console.log(`[golden-eye] dashboard  http://${HOST}:${port}`);
-    console.log(`[golden-eye] ingest     POST http://${HOST}:${port}/ingest`);
-    console.log(`[golden-eye] data dir   ${config.DATA_DIR}`);
-    startIdleWatch();
-  });
-  server.once('error', (err) => {
+  const onListenError = (err) => {
+    server.removeListener('listening', onListening);
     if (err && err.code === 'EADDRINUSE' && pinnedPort == null) {
       console.log(`[golden-eye] :${port} busy — trying next candidate`);
       listenOn(index + 1, null);
@@ -372,7 +385,22 @@ function listenOn(index, pinnedPort) {
       console.error(`[golden-eye] listen failed: ${(err && err.message) || err}`);
       process.exit(1);
     }
-  });
+  };
+  const onListening = () => {
+    server.removeListener('error', onListenError);
+    // Post-listen errors (e.g. EMFILE on accept) must not kill the singleton.
+    server.on('error', (err) => {
+      console.error(`[golden-eye] server error: ${(err && err.message) || err}`);
+    });
+    writeServerFile(port);
+    console.log(`[golden-eye] dashboard  http://${HOST}:${port}`);
+    console.log(`[golden-eye] ingest     POST http://${HOST}:${port}/ingest`);
+    console.log(`[golden-eye] data dir   ${config.DATA_DIR}`);
+    startIdleWatch();
+  };
+  server.listen(port, HOST);
+  server.once('error', onListenError);
+  server.once('listening', onListening);
 }
 
 const pinnedPort = process.env.GOLDEN_EYE_PORT ? Number(process.env.GOLDEN_EYE_PORT) : null;

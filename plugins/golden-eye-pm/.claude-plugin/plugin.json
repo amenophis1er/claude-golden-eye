@@ -2,6 +2,9 @@
   "name": "golden-eye-pm",
   "description": "PM-mode discipline for Claude Code: /pm turns the main session into a delegate-only project manager (writes hook-blocked, subagent model pinning). Composes with the golden-eye observer for state + dashboard.",
   "version": "0.1.0",
-  "author": { "name": "amen" },
+  "author": { "name": "Amen" },
+  "license": "MIT",
+  "homepage": "https://github.com/amenophis1er/claude-golden-eye#readme",
+  "repository": "https://github.com/amenophis1er/claude-golden-eye",
   "keywords": ["workflow", "delegation", "subagents", "hooks", "discipline"]
 }

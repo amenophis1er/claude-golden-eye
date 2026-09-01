@@ -24,7 +24,10 @@ export function useDashboard() {
       if (debounceRef.current) window.clearTimeout(debounceRef.current);
       debounceRef.current = window.setTimeout(refetch, 200);
     });
-    return () => es.close();
+    return () => {
+      es.close();
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    };
   }, [refetch]);
 
   return { state, connected, refetch };

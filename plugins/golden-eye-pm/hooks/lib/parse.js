@@ -20,7 +20,10 @@ const RAW_PM_RE = /^\s*\/(?:[\w.-]+:)?pm\b/;
 function extractArgs(prompt) {
   if (typeof prompt !== 'string' || !prompt) return null;
   if (prompt.indexOf('PM-MODE-COMMAND') !== -1) {
-    const m = prompt.match(/arguments:\s*"([\s\S]*)"/i);
+    // Bound to one line: `.` excludes newlines, so the greedy match ends at
+    // the last quote of the args line itself — quotes later in the expanded
+    // skill body (e.g. `"/pm off"`) can no longer bleed into the mission.
+    const m = prompt.match(/arguments:\s*"(.*)"/i);
     return m ? m[1].trim() : '';
   }
   if (RAW_PM_RE.test(prompt)) {
@@ -43,7 +46,7 @@ function parsePmPrompt(prompt) {
     (_, m) => { subModel = m.toLowerCase(); return ''; }
   );
   const mission = argsSansSub
-    .replace(/^on\b/, '')
+    .replace(/^on\b/i, '')
     .replace(/^\s*[-–—:,.]?\s*/, '')
     .trim();
   return { action: 'on', mission, subModel };

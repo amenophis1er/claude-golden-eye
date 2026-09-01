@@ -2,7 +2,10 @@
   "name": "golden-eye",
   "description": "Live, view-only oversight of Claude Code sessions: passive hooks feed a local dashboard (agents, transcripts, plan, tokens). Zero runtime dependencies; never alters a session.",
   "version": "0.1.0",
-  "author": { "name": "amen" },
+  "author": { "name": "Amen" },
+  "license": "MIT",
+  "homepage": "https://github.com/amenophis1er/claude-golden-eye#readme",
+  "repository": "https://github.com/amenophis1er/claude-golden-eye",
   "keywords": ["monitoring", "hooks", "subagents", "observability", "dashboard"],
   "mcpServers": {
     "golden-eye": {

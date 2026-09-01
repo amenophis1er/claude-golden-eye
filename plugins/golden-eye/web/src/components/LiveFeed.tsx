@@ -293,7 +293,7 @@ export default function LiveFeed({ session, events, now }: { session: SessionInf
             const Icon = en.icon;
             return (
               <details
-                key={i}
+                key={en.event.__seq ?? `${en.ts}:${en.label}:${i}`}
                 className={`group rounded-lg px-2 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-900 ${en.emphasis ? 'bg-red-50 dark:bg-red-950/30' : ''}`}
               >
                 <summary className="flex cursor-pointer list-none items-baseline gap-2.5 [&::-webkit-details-marker]:hidden">

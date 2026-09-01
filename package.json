@@ -1,8 +1,22 @@
 {
   "name": "claude-golden-eye",
   "version": "0.1.0",
-  "private": true,
   "description": "Live Claude Code session oversight + PM-mode discipline (hooks + MCP + dashboard)",
+  "license": "MIT",
+  "author": { "name": "Amen" },
+  "homepage": "https://github.com/amenophis1er/claude-golden-eye#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/amenophis1er/claude-golden-eye.git"
+  },
+  "bugs": { "url": "https://github.com/amenophis1er/claude-golden-eye/issues" },
+  "keywords": ["claude-code", "plugin", "monitoring", "observability", "dashboard", "hooks", "subagents"],
+  "files": [
+    ".claude-plugin/",
+    "plugins/",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "test": "node --test"
   }

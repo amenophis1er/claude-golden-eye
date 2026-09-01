@@ -76,7 +76,9 @@ function newAgent(overrides = {}) {
       transcriptPath: null,
       lastTool: null,
       lastToolAt: null,
-      tools: {},
+      // Null prototype: tool names are attacker-ish input (hook payloads), and
+      // a name like "__proto__" would silently corrupt counts on a plain {}.
+      tools: Object.create(null),
       toolEvents: 0,
     },
     overrides
@@ -87,6 +89,9 @@ class Store {
   constructor() {
     this.sessions = new Map();
     this.events = [];
+    this.pruned = new Set(); // tombstoned session ids — stragglers must not resurrect them
+    this.seq = 0;            // monotonic per-process event id (stable UI keys)
+    this.appendsSinceRotateCheck = 0;
     this.load();
   }
 
@@ -115,17 +120,42 @@ class Store {
     const e = {
       __ts: event.__ts || nowIso(),
       __hook: event.__hook || '(unknown)',
+      __seq: this.seq++,
       payload: event.payload,
     };
+    // Replay determinism: SubagentStop handling depends on whether the agent
+    // transcript exists on disk, which can change between now and a later
+    // replay (cleanups). Decide once at ingest and persist the verdict.
+    if (
+      e.__hook === 'SubagentStop' &&
+      e.payload.__transcript_exists === undefined &&
+      e.payload.agent_transcript_path
+    ) {
+      try { e.payload.__transcript_exists = fs.existsSync(e.payload.agent_transcript_path); } catch (_) {}
+    }
     this.events.push(e);
     if (this.events.length > MAX_EVENTS_IN_MEMORY) {
       this.events = this.events.slice(-MAX_EVENTS_IN_MEMORY);
     }
     if (persist) {
       try { fs.appendFileSync(EVENTS_FILE, JSON.stringify(e) + '\n'); } catch (_) {}
+      this.maybeRotate();
     }
     try { this.reduce(e); } catch (_) { /* a bad event must never kill ingest */ }
     return e;
+  }
+
+  // load() rotates at boot; a long-lived server (launchd + idle-exit off never
+  // restarts) also has to cap the log at runtime. Cheap: stat every N appends.
+  maybeRotate() {
+    if (++this.appendsSinceRotateCheck < 500) return;
+    this.appendsSinceRotateCheck = 0;
+    try {
+      if (fs.existsSync(EVENTS_FILE) && fs.statSync(EVENTS_FILE).size > ROTATE_FILE_BYTES) {
+        const lines = fs.readFileSync(EVENTS_FILE, 'utf8').trimEnd().split('\n');
+        fs.writeFileSync(EVENTS_FILE, rotateLines(lines).join('\n') + '\n');
+      }
+    } catch (_) { /* rotation is best-effort */ }
   }
 
   getOrCreateSession(p, ts) {
@@ -200,7 +230,15 @@ class Store {
       // Tombstone: must not pass through getOrCreateSession (it would
       // resurrect the session it is deleting).
       this.sessions.delete(p.session_id);
+      this.pruned.add(p.session_id);
       return;
+    }
+    if (this.pruned.has(p.session_id)) {
+      // Straggler events (a racing Stop, replayed lines) must not resurrect
+      // a pruned session. A genuine restart announces itself: SessionStart
+      // lifts the tombstone.
+      if (e.__hook !== 'SessionStart') return;
+      this.pruned.delete(p.session_id);
     }
     const s = this.getOrCreateSession(p, e.__ts);
     s.lastActivity = e.__ts;
@@ -423,7 +461,9 @@ class Store {
           // written to disk. Binding one would steal a pending spawn slot
           // from a real subagent and close it at 0.0s — drop it instead.
           const real =
-            p.agent_transcript_path && fs.existsSync(p.agent_transcript_path);
+            p.__transcript_exists !== undefined
+              ? p.__transcript_exists // ingest-time verdict (replay-stable)
+              : p.agent_transcript_path && fs.existsSync(p.agent_transcript_path);
           if (!real) break;
           a = this.bindAgent(s, p.agent_id || 'unknown:' + e.__ts);
         }

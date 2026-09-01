@@ -12,8 +12,6 @@ const path = require('path');
 
 const PLUGIN_ROOT =
   process.env.CLAUDE_PLUGIN_ROOT || path.resolve(__dirname, '..', '..');
-const LOG_DIR = process.env.GOLDEN_EYE_LOG_DIR || path.join(PLUGIN_ROOT, '.probe');
-const LOG_FILE = path.join(LOG_DIR, 'hook-events.jsonl');
 
 // Bridge target: the golden-eye dashboard server. The server records its
 // actual port in server.json on boot, so hooks follow it (port candidates
@@ -24,6 +22,17 @@ try {
 } catch (_) {
   /* plugin running standalone — fall back to the default URL */
 }
+
+// Fallback JSONL log lives in the shared data dir, NOT the plugin install dir
+// (which plugin updates wipe and which nothing ever rotates). The old .probe
+// location remains reachable via GOLDEN_EYE_LOG_DIR for the probe rig.
+const LOG_DIR =
+  process.env.GOLDEN_EYE_LOG_DIR ||
+  (sharedConfig ? path.join(sharedConfig.DATA_DIR, 'logs') : path.join(PLUGIN_ROOT, '.probe'));
+const LOG_FILE = path.join(LOG_DIR, 'hook-events.jsonl');
+// Cap: when the log crosses the limit, the current file is shifted to .1
+// (replacing the previous shift) — bounded at ~2× the cap total.
+const LOG_MAX_BYTES = 5 * 1024 * 1024;
 
 /**
  * Returns the ingest URL, or null when no server is known to exist (no
@@ -48,6 +57,11 @@ function resolveServerUrl() {
 function appendJsonSafe(file, obj) {
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
+    try {
+      if (fs.statSync(file).size > LOG_MAX_BYTES) fs.renameSync(file, file + '.1');
+    } catch (_) {
+      /* no file yet, or rename raced another hook — either way, append below */
+    }
     fs.appendFileSync(file, JSON.stringify(obj) + '\n');
   } catch (err) {
     try {

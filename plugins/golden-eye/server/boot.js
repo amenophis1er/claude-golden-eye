@@ -41,6 +41,10 @@ async function healthz(port) {
 // SessionStart. The lock records { pid, ts }; a lock whose owner is dead or
 // that has outlived any plausible bootstrap is broken and retaken.
 const STALE_LOCK_MS = 15_000;
+// A lock whose owner is STILL ALIVE gets a much longer leash: a legitimate
+// bootstrap can spend >15s walking ports on a slow machine, and stealing its
+// lock mid-spawn double-starts the server.
+const STALE_LOCK_ALIVE_MS = 60_000;
 
 function acquireLock() {
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -59,7 +63,7 @@ function acquireLock() {
         const age = Date.now() - st.mtimeMs;
         stale =
           meta && meta.pid
-            ? !pidAlive(meta.pid) || age > STALE_LOCK_MS
+            ? !pidAlive(meta.pid) || age > STALE_LOCK_ALIVE_MS
             : age > STALE_LOCK_MS; // not yet written: judge by mtime alone
       } catch (_) {
         continue; // lock vanished between open-fail and stat — just retry
@@ -97,7 +101,12 @@ async function startServer(port) {
     const t0 = Date.now();
     const poll = async () => {
       if (await healthz(port)) return resolve(child.pid);
-      if (Date.now() - t0 > 2500) return resolve(null);
+      if (Date.now() - t0 > 2500) {
+        // Kill the straggler: a child that passes healthz AFTER this timeout
+        // would coexist with the next port's spawn — two live servers.
+        try { process.kill(child.pid); } catch (_) {}
+        return resolve(null);
+      }
       setTimeout(poll, 150);
     };
     poll();
