@@ -252,3 +252,11 @@ test('first tagged tool event flips a FIFO-bound agent from starting to running'
   add(store, 'PreToolUse', { tool_name: 'Read', tool_input: { file_path: '/x' }, agent_id: 'R1' });
   assert.equal(session(store).agents['agent:R1'].status, 'running');
 });
+
+test('serialized main agent reads done for ended sessions too', () => {
+  const store = freshStore();
+  add(store, 'PreToolUse', { tool_name: 'Bash', tool_input: { command: 'ls' } });
+  add(store, 'SessionEnd', { reason: 'other' });
+  const out = store.serialize().sessions.find((x) => x.id === SID);
+  assert.equal(out.agents.find((a) => a.mainAgent).status, 'done');
+});

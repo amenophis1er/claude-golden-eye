@@ -75,7 +75,14 @@ function baseEntry(e: HookEvent): Omit<Entry, 'event'> | null {
 }
 
 function NowStrip({ session, now }: { session: SessionInfo; now: number }) {
-  const running = session.agents.filter((a) => a.status === 'running' || a.status === 'starting');
+  // "Now" means now: hide entries whose last tool activity is stale (a
+  // session killed mid-turn would otherwise show absurd elapsed times).
+  const running = session.agents.filter(
+    (a) =>
+      (a.status === 'running' || a.status === 'starting') &&
+      a.lastToolAt != null &&
+      now - Date.parse(a.lastToolAt) < 10 * 60 * 1000
+  );
   if (!running.length) return null;
   return (
     <div className="flex flex-wrap gap-2 border-b border-zinc-200 bg-white px-4 py-2.5 dark:border-zinc-800 dark:bg-zinc-900/40">

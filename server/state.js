@@ -470,8 +470,8 @@ class Store {
           agents: Object.values(s.agents).map((a) => ({
             ...a,
             tools: { ...a.tools },
-            // The main agent's card follows session state (Stop ⇒ done).
-            status: a.mainAgent ? (s.state === 'idle' ? 'done' : 'running') : a.status,
+            // The main agent's card follows session state (Stop/SessionEnd ⇒ done).
+            status: a.mainAgent ? (s.state === 'idle' || s.state === 'ended' ? 'done' : 'running') : a.status,
           })),
         })),
       events: this.events.slice(-400),
