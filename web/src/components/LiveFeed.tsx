@@ -94,13 +94,18 @@ function NowStrip({ session, now }: { session: SessionInfo; now: number }) {
   return (
     <div className="flex flex-wrap gap-2 border-b border-zinc-200 bg-white px-4 py-2.5 dark:border-zinc-800 dark:bg-zinc-900/40">
       {running.map((a, i) => (
-        <div key={a.id ?? i} className="flex items-center gap-2 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs dark:border-zinc-800">
+        <a
+          key={a.id ?? i}
+          href={`#/s/${encodeURIComponent(session.id)}/agents/${encodeURIComponent(a.mainAgent ? 'main' : (a.id ?? ''))}`}
+          title="open agent"
+          className="flex items-center gap-2 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:bg-zinc-800/50"
+        >
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 pulse-dot" />
           {a.mainAgent ? <User size={12} className="text-zinc-400" /> : <Bot size={12} className="text-violet-400" />}
           <span className="font-medium">{a.mainAgent ? 'main' : (a.description ?? a.type ?? 'agent').slice(0, 40)}</span>
           {a.lastTool && <span className="text-zinc-400">→ {a.lastTool}</span>}
           {a.lastToolAt && <span className="text-zinc-400 tabular-nums">{fmtDur(now - Date.parse(a.lastToolAt))}</span>}
-        </div>
+        </a>
       ))}
     </div>
   );
