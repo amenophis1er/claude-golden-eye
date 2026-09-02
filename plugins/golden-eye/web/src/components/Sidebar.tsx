@@ -16,8 +16,11 @@ function groupOf(s: SessionInfo, now: number): 'active' | 'idle' | 'stale' {
   const age = now - Date.parse(s.lastActivity);
   if ((s.state === 'working' || s.state === 'active') && age < ACTIVE_FRESH_MS) return 'active';
   if (s.state === 'ended' || age > STALE_MS) return 'stale';
-  // Empty husks (viewer forks, aborted startups: no prompt, no tool calls)
-  // shouldn't linger in Idle — stale after 10 quiet minutes.
+  // Forks are background agent runners: they never take direct user input,
+  // so a quiet fork is a finished fork — stale after 10 minutes, even when
+  // it did real work (forks often exit without a SessionEnd hook firing).
+  // Same rule for empty husks (aborted startups: no prompt, no tool calls).
+  if (s.startSource === 'fork' && age > 10 * 60 * 1000) return 'stale';
   if (!s.lastPrompt && s.stats.toolCalls === 0 && age > 10 * 60 * 1000) return 'stale';
   return 'idle';
 }
@@ -58,7 +61,10 @@ function Row({ s, now, selected, tab }: { s: SessionInfo; now: number; selected:
           {shortId(s.id)} · {relTime(s.lastActivity, now)}
         </div>
       </div>
-      {group === 'stale' && (
+      {/* Stale rows are removable; so are non-active forks — a fork never
+          takes user input, so pruning one can't swallow a session someone
+          is about to type back into. */}
+      {(group === 'stale' || (s.startSource === 'fork' && group !== 'active')) && (
         <button
           title="Remove from dashboard"
           className="hidden rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700 group-hover:block dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
