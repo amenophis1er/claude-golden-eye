@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ArrowDownToLine, ArrowDownUp, Bot, CheckCircle2, Circle, CircleDot, Flag, GitFork,
-  ListTodo, MessageSquare, Play, Power, ShieldX, TerminalSquare, TrendingUp, User,
+  ListTodo, MessageSquare, Play, Power, Send, ShieldX, TerminalSquare, TrendingUp, User,
 } from 'lucide-react';
 import type { HookEvent, SessionInfo, Todo } from '../lib/types';
 import EventDetail from './EventDetail';
@@ -227,7 +227,70 @@ function OutputPanel({ session }: { session: SessionInfo }) {
         )}
       </section>
       <PlanRail todos={session.todos} />
+      {session.channelConnected && <Composer sessionId={session.id} />}
     </div>
+  );
+}
+
+// Dashboard composer: sends a message into the live session via the channel
+// bridge. Rendered only when the server reports channelConnected — i.e. the
+// opt-in is on AND this session's channel process holds a live subscription.
+function Composer({ sessionId }: { sessionId: string }) {
+  const [text, setText] = useState('');
+  const [status, setStatus] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const send = async () => {
+    const t = text.trim();
+    if (!t || busy) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      const r = await fetch('/api/channel/send', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sessionId, text: t }),
+      });
+      const j = await r.json();
+      if (r.ok && j.ok) {
+        setText('');
+        setStatus({ kind: 'ok', msg: 'sent — queued into the session' });
+      } else {
+        setStatus({ kind: 'err', msg: j.error ?? `send failed (${r.status})` });
+      }
+    } catch {
+      setStatus({ kind: 'err', msg: 'server unreachable' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="shrink-0 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+      <h3 className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-zinc-400 uppercase">
+        <Send size={11} /> Message session
+      </h3>
+      <textarea
+        value={text}
+        onChange={(e) => { setText(e.target.value); setStatus(null); }}
+        onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); send(); } }}
+        rows={2}
+        placeholder="Steer the session… (⌘⏎ to send)"
+        className="w-full resize-y rounded-lg border border-zinc-200 bg-white p-2 text-xs focus:border-amber-400 focus:outline-none dark:border-zinc-800 dark:bg-zinc-900"
+      />
+      <div className="mt-1 flex items-center justify-between gap-2">
+        <span className={`min-w-0 truncate text-[10px] ${status?.kind === 'err' ? 'text-red-500' : 'text-zinc-400'}`}>
+          {status?.msg ?? 'arrives as a golden-eye channel event'}
+        </span>
+        <button
+          onClick={send}
+          disabled={busy || !text.trim()}
+          className="shrink-0 rounded-lg bg-zinc-900 px-3 py-1 text-[11px] font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
+        >
+          {busy ? 'sending…' : 'send'}
+        </button>
+      </div>
+    </section>
   );
 }
 

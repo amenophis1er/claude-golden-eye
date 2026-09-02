@@ -123,6 +123,10 @@ async function logStdinEvent(hookName, payloadArg) {
   const entry = {
     __hook: hookName,
     __ts: new Date().toISOString(),
+    // Hook processes are children of the claude process, so ppid identifies
+    // the session's OS process — the channel bridge (same parent) uses it to
+    // route dashboard-composer messages to the right session.
+    __pid: process.ppid || null,
     payload,
   };
 

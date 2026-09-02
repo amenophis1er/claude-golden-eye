@@ -95,6 +95,33 @@ Bundled MCP server (`plugins/golden-eye/server/mcp-server.js`, zero-dependency s
 Progress drives the mission card's bar; `blocked` shows red and fires a desktop
 notification (macOS).
 
+## Dashboard composer (opt-in, channels research preview)
+
+Type into a live session from the dashboard. Built on [Claude Code
+channels](https://code.claude.com/docs/en/channels-reference): the bundled MCP
+server declares the `claude/channel` capability, and composer messages are
+injected as channel events — visible in the terminal as a
+`← golden-eye: …` line, and acted on as a real turn. **Off by default**; two
+explicit opt-ins are required:
+
+1. Server side: start the golden-eye server with `GOLDEN_EYE_COMPOSER=1`
+   (otherwise every composer endpoint answers 404 and no bridge forms).
+2. Session side: channels are a research preview, so each session must start
+   with `claude --dangerously-load-development-channels plugin:golden-eye@claude-golden-eye`
+   (full-screen warning; that's Anthropic's gate, not ours).
+
+The composer box appears in a session's Live-tab rail only when both are true
+(the session's channel bridge is connected). Sends are attributed in the feed
+as `DashboardPrompt` rows. Routing is deterministic: hooks and the MCP process
+share the claude process pid, so a message reaches exactly one session.
+
+Security: the composer lets whoever reaches the HTTP port steer your sessions.
+Direct loopback requests are trusted (Host-checked); **proxied** requests
+(e.g. `tailscale serve` — they carry `X-Forwarded-*`) must send the
+`X-Golden-Eye-Token` header matching `<data dir>/composer.token` (0600).
+One-way by design: no reply tool, no permission relay — the dashboard already
+sees the session's output passively.
+
 ## Notifications
 
 Throttled (≥5 s) macOS notifications (`GOLDEN_EYE_NOTIFY=0` to disable): subagent finished ·
@@ -179,6 +206,7 @@ delegation stats on the dashboard.
 | `GOLDEN_EYE_IDLE_EXIT_MS` | 1 800 000 (30 min) | auto-exit (0 = never) |
 | `GOLDEN_EYE_NOTIFY` | on | set `0` to disable notifications |
 | `GOLDEN_EYE_LOG_DIR` | `<data dir>/logs` | hooks' fallback JSONL log location |
+| `GOLDEN_EYE_COMPOSER` | off | `1` = enable the dashboard composer (channel injection) |
 | `GOLDEN_EYE_DISABLE_POST` | unset | `1` = local logging only |
 
 ## Known limits

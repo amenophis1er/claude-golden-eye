@@ -62,6 +62,7 @@ test.before(async () => {
       GOLDEN_EYE_DATA_DIR: path.join(tmp, 'data'),
       GOLDEN_EYE_PORT: String(port),
       GOLDEN_EYE_NOTIFY: '0',
+      GOLDEN_EYE_COMPOSER: '1',
     },
     stdio: ['ignore', 'ignore', 'pipe'],
   });
@@ -140,5 +141,115 @@ test('static: traversal paths fall through to the SPA, never leak files', async 
     const body = await r.text();
     assert.ok(!body.includes('PORT_CANDIDATES'), `${p} leaked server source`);
     assert.ok(!body.includes('"private"'), `${p} leaked package.json`);
+  }
+});
+
+test('composer: send without a connected bridge is a 409 with guidance', async () => {
+  const r = await fetch(`${base}/api/channel/send`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ sessionId: SID, text: 'hello' }),
+  });
+  assert.equal(r.status, 409);
+  assert.match((await r.json()).error, /dangerously-load-development-channels/);
+});
+
+test('composer: bridge subscription routes a send to exactly that session', async () => {
+  const http = require('http');
+  const PID = '54321';
+
+  // Bind the fixture session to a claude pid via the real ingest path.
+  await fetch(`${base}/ingest`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      __hook: 'UserPromptSubmit',
+      __ts: new Date().toISOString(),
+      __pid: Number(PID),
+      payload: { session_id: SID, prompt: 'work' },
+    }),
+  });
+
+  // Subscribe like the MCP channel process does.
+  const lines = [];
+  let onLine = null;
+  const req = http.get(`${base}/api/channel/subscribe?pid=${PID}`, (res) => {
+    assert.equal(res.statusCode, 200);
+    let buf = '';
+    res.setEncoding('utf8');
+    res.on('data', (c) => {
+      buf += c;
+      let i;
+      while ((i = buf.indexOf('\n')) !== -1) {
+        const line = buf.slice(0, i).trim();
+        buf = buf.slice(i + 1);
+        if (line) { lines.push(JSON.parse(line)); onLine && onLine(); }
+      }
+    });
+  });
+  const waitFor = (pred) =>
+    new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error('timed out; got ' + JSON.stringify(lines))), 3000);
+      onLine = () => { if (lines.some(pred)) { clearTimeout(t); resolve(); } };
+      onLine();
+    });
+  await waitFor((l) => l.type === 'hello');
+
+  // channelConnected now reflects the live bridge.
+  const st = await (await fetch(`${base}/api/state`)).json();
+  assert.equal(st.sessions.find((x) => x.id === SID).channelConnected, true);
+
+  const r = await fetch(`${base}/api/channel/send`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ sessionId: SID, text: 'steer left' }),
+  });
+  assert.equal(r.status, 200);
+  await waitFor((l) => l.type === 'message' && l.text === 'steer left');
+
+  // The injection is attributed in the event feed.
+  const st2 = await (await fetch(`${base}/api/state`)).json();
+  assert.ok(st2.events.some((e) => e.__hook === 'DashboardPrompt' && e.payload.prompt === 'steer left'));
+  req.destroy();
+});
+
+test('composer: proxied requests need the token; the right token passes', async () => {
+  const denied = await fetch(`${base}/api/channel/send`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-forwarded-for': '100.64.0.7' },
+    body: JSON.stringify({ sessionId: SID, text: 'hi' }),
+  });
+  assert.equal(denied.status, 403);
+
+  const token = fs.readFileSync(path.join(tmp, 'data', 'composer.token'), 'utf8').trim();
+  const ok = await fetch(`${base}/api/channel/send`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-forwarded-for': '100.64.0.7', 'x-golden-eye-token': token },
+    body: JSON.stringify({ sessionId: SID, text: 'hi' }),
+  });
+  assert.notEqual(ok.status, 403); // authenticates; may 409 if the bridge test ran first and closed
+});
+
+test('composer: fully disabled without the opt-in env (404 on both endpoints)', async () => {
+  const port = await freePort();
+  const off = spawn(process.execPath, [SERVER], {
+    env: { ...process.env, GOLDEN_EYE_DATA_DIR: path.join(tmp, 'data-off'), GOLDEN_EYE_PORT: String(port), GOLDEN_EYE_NOTIFY: '0' },
+    stdio: 'ignore',
+  });
+  try {
+    const b = `http://127.0.0.1:${port}`;
+    for (let i = 0; i < 50; i++) {
+      try { if ((await (await fetch(`${b}/healthz`)).json()).ok) break; } catch (_) {}
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    assert.equal((await fetch(`${b}/api/channel/subscribe?pid=1`)).status, 404);
+    const r = await fetch(`${b}/api/channel/send`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sessionId: 'x', text: 'x' }),
+    });
+    assert.equal(r.status, 404);
+  } finally {
+    off.kill('SIGTERM');
   }
 });

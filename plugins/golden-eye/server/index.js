@@ -73,6 +73,39 @@ function maybeNotify(ev) {
 const store = new Store();
 const sseClients = new Set();
 
+// ---------- dashboard composer (channel bridge) ----------
+// Opt-in: everything below 404s unless GOLDEN_EYE_COMPOSER=1 on the server.
+// Each session's golden-eye MCP process subscribes here (keyed by the claude
+// process pid it shares with the hooks); the composer routes a message to
+// exactly one session's bridge, which injects it as a Claude Code channel
+// event. See README "Dashboard composer".
+const COMPOSER_ENABLED = process.env.GOLDEN_EYE_COMPOSER === '1';
+const channelSubs = new Map(); // claude pid (string) -> ndjson response stream
+
+let composerToken = null;
+function getComposerToken() {
+  if (composerToken) return composerToken;
+  const file = path.join(config.DATA_DIR, 'composer.token');
+  try { composerToken = fs.readFileSync(file, 'utf8').trim() || null; } catch (_) {}
+  if (!composerToken) {
+    composerToken = require('crypto').randomBytes(24).toString('hex');
+    try {
+      fs.mkdirSync(config.DATA_DIR, { recursive: true });
+      fs.writeFileSync(file, composerToken + '\n', { mode: 0o600 });
+    } catch (_) {}
+  }
+  return composerToken;
+}
+
+// Direct loopback requests are the trusted path (Host is already validated).
+// A proxied request (e.g. `tailscale serve` adds X-Forwarded-*) can inject
+// prompts into sessions, so it must present the token from the data dir.
+function composerAuthorized(req) {
+  const proxied = !!(req.headers['x-forwarded-for'] || req.headers['x-forwarded-host']);
+  if (!proxied) return true;
+  return req.headers['x-golden-eye-token'] === getComposerToken();
+}
+
 // Static hosting for the built dashboard (web/dist, hashed asset names).
 // Resolved paths are verified to stay inside DIST_DIR — no traversal surface.
 const DIST_DIR = path.join(WEB_DIR, 'dist');
@@ -135,6 +168,9 @@ function broadcast(eventObj) {
 setInterval(() => {
   for (const res of sseClients) {
     try { res.write(': ping\n\n'); } catch (_) { sseClients.delete(res); }
+  }
+  for (const [pid, res] of channelSubs) {
+    try { res.write('{"type":"ping"}\n'); } catch (_) { channelSubs.delete(pid); }
   }
 }, 25_000).unref();
 
@@ -220,6 +256,9 @@ const server = http.createServer(async (req, res) => {
       // created before hooks were watching); event-mirrored todos are the
       // fallback when no store dir exists for the session.
       for (const sess of snapshot.sessions) {
+        // Composer availability for this session: bridge connected right now.
+        sess.channelConnected =
+          COMPOSER_ENABLED && sess.claudePid != null && channelSubs.has(String(sess.claudePid));
         const tasks = tasksForSession(sess.id, sess.transcriptPath);
         if (tasks) sess.todos = tasks;
         sess.env = sessionStats(sess.transcriptPath); // branch/model/tokens/context
@@ -313,6 +352,45 @@ const server = http.createServer(async (req, res) => {
       }
       lastEventAt = Date.now();
       return sendJson(res, 200, { ok: true, pruned: ids });
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/channel/subscribe') {
+      // The per-session MCP channel process registers its bridge here.
+      if (!COMPOSER_ENABLED) return sendJson(res, 404, { error: 'composer disabled (set GOLDEN_EYE_COMPOSER=1 on the server)' });
+      const pid = url.searchParams.get('pid');
+      if (!/^\d+$/.test(pid || '')) return sendJson(res, 400, { error: 'pid required' });
+      res.writeHead(200, { 'Content-Type': 'application/x-ndjson', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
+      res.write('{"type":"hello"}\n');
+      channelSubs.set(pid, res);
+      req.on('close', () => { if (channelSubs.get(pid) === res) channelSubs.delete(pid); });
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/channel/send') {
+      if (!COMPOSER_ENABLED) return sendJson(res, 404, { error: 'composer disabled (set GOLDEN_EYE_COMPOSER=1 on the server)' });
+      if (!composerAuthorized(req)) return sendJson(res, 403, { error: 'proxied access requires X-Golden-Eye-Token (see composer.token in the data dir)' });
+      const body = await readJsonBody(req);
+      const sid = body && body.sessionId;
+      const text = body && typeof body.text === 'string' ? body.text.trim().slice(0, 4000) : '';
+      if (!sid || !text) return sendJson(res, 400, { error: 'sessionId + text required' });
+      const s = store.sessions.get(sid);
+      if (!s) return sendJson(res, 404, { error: 'unknown session' });
+      const sub = s.claudePid != null ? channelSubs.get(String(s.claudePid)) : null;
+      if (!sub) {
+        return sendJson(res, 409, {
+          error: 'no channel bridge for this session — start it with: claude --dangerously-load-development-channels plugin:golden-eye@claude-golden-eye',
+        });
+      }
+      try {
+        sub.write(JSON.stringify({ type: 'message', text }) + '\n');
+      } catch (_) {
+        channelSubs.delete(String(s.claudePid));
+        return sendJson(res, 502, { error: 'bridge write failed — retry' });
+      }
+      const ev = store.addEvent({ __hook: 'DashboardPrompt', payload: { session_id: sid, prompt: text } });
+      if (ev) broadcast(ev);
+      lastEventAt = Date.now();
+      return sendJson(res, 200, { ok: true });
     }
 
     if (req.method === 'GET' && url.pathname === '/healthz') {

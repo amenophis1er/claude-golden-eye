@@ -54,6 +54,8 @@ export interface SessionInfo {
   agents: AgentInfo[];
   /** Transcript history older than the first observed hook event (resume backfill). */
   replay?: ReplayEntry[];
+  /** Composer availability: server opt-in + this session's channel bridge live. */
+  channelConnected?: boolean;
 }
 
 export interface ReplayEntry {

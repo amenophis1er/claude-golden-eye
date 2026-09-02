@@ -123,6 +123,7 @@ class Store {
       __seq: this.seq++,
       payload: event.payload,
     };
+    if (event.__pid) e.__pid = event.__pid;
     // Replay determinism: SubagentStop handling depends on whether the agent
     // transcript exists on disk, which can change between now and a later
     // replay (cleanups). Decide once at ingest and persist the verdict.
@@ -175,6 +176,7 @@ class Store {
         todos: [],
         tasks: [],
         startSource: null,
+        claudePid: null,
         pmMode: false,
         mission: null,
         subModel: null,
@@ -244,6 +246,7 @@ class Store {
     s.lastActivity = e.__ts;
     // Mode can be cycled mid-session (shift+tab) — track the latest.
     if (p.permission_mode) s.permissionMode = p.permission_mode;
+    if (e.__pid) s.claudePid = e.__pid; // latest wins: resumes get a new process
     if (!s.transcriptPath && p.transcript_path) s.transcriptPath = p.transcript_path;
 
     switch (e.__hook) {
@@ -522,6 +525,7 @@ class Store {
           lastActivity: s.lastActivity,
           state: s.state,
           startSource: s.startSource,
+          claudePid: s.claudePid,
           pmMode: !!s.pmMode,
           mission: s.mission || null,
           subModel: s.subModel || null,

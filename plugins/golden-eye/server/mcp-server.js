@@ -155,6 +155,60 @@ const TOOLS = [
   },
 ];
 
+// ---------- dashboard composer bridge (channel) ----------
+// Long-lived ndjson subscription to the golden-eye server, keyed by our
+// parent pid (the claude process — the same key the hooks report, so the
+// server can route a composer message to exactly this session). Messages
+// are re-emitted as Claude Code channel notifications on stdout.
+//
+// Fail-soft by design: composer disabled server-side (404) -> slow retry;
+// no server at all -> retry with backoff. Neither ever breaks MCP traffic.
+let bridgeStarted = false;
+function startChannelBridge() {
+  if (bridgeStarted || !process.ppid) return;
+  bridgeStarted = true;
+  const retry = (ms) => setTimeout(connect, ms).unref();
+  function connect() {
+    const req = http.request(
+      base() + '/api/channel/subscribe?pid=' + process.ppid,
+      { method: 'GET' },
+      (res) => {
+        if (res.statusCode !== 200) {
+          res.resume();
+          return retry(60_000); // composer disabled — check back rarely
+        }
+        let buf = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => {
+          buf += chunk;
+          let i;
+          while ((i = buf.indexOf('\n')) !== -1) {
+            const line = buf.slice(0, i).trim();
+            buf = buf.slice(i + 1);
+            if (!line) continue;
+            let m;
+            try { m = JSON.parse(line); } catch (_) { continue; }
+            if (m && m.type === 'message' && typeof m.text === 'string' && m.text) {
+              process.stdout.write(
+                JSON.stringify({
+                  jsonrpc: '2.0',
+                  method: 'notifications/claude/channel',
+                  params: { content: m.text, meta: { sender: 'dashboard' } },
+                }) + '\n'
+              );
+            }
+          }
+        });
+        res.on('end', () => retry(3_000));   // server restarted — reconnect fast
+        res.on('error', () => retry(5_000));
+      }
+    );
+    req.on('error', () => retry(15_000)); // no server yet — keep trying calmly
+    req.end();
+  }
+  connect();
+}
+
 function respond(id, result) {
   if (id === undefined || id === null) return; // notification: no reply
   process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n');
@@ -171,11 +225,22 @@ async function handle(msg) {
     case 'initialize':
       respond(id, {
         protocolVersion: params && params.protocolVersion ? params.protocolVersion : '2024-11-05',
-        capabilities: { tools: {} },
+        // 'claude/channel' declares this server as a Claude Code channel
+        // (research preview): the dashboard composer can inject messages into
+        // the session. Harmless when the session was not started with the
+        // channels flag — Claude Code then simply never registers the
+        // listener and our notifications are dropped.
+        capabilities: { tools: {}, experimental: { 'claude/channel': {} } },
         serverInfo: { name: 'golden-eye', version: '0.1.0' },
+        instructions:
+          'golden-eye channel: events tagged <channel source="golden-eye" sender="dashboard"> are ' +
+          'messages typed by the session owner in the oversight dashboard composer. Treat them as ' +
+          'user guidance: acknowledge briefly and act. One-way — no reply tool; your normal session ' +
+          'output is already visible on the dashboard.',
       });
       return;
     case 'notifications/initialized':
+      startChannelBridge();
       return;
     case 'ping':
       respond(id, {});
