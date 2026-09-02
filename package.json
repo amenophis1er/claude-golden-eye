@@ -13,9 +13,13 @@
   "keywords": ["claude-code", "plugin", "monitoring", "observability", "dashboard", "hooks", "subagents"],
   "files": [
     ".claude-plugin/",
-    "plugins/",
-    "README.md",
-    "LICENSE"
+    "plugins/golden-eye/.claude-plugin/",
+    "plugins/golden-eye/hooks/",
+    "plugins/golden-eye/server/",
+    "plugins/golden-eye/deploy/",
+    "plugins/golden-eye/commands/",
+    "plugins/golden-eye/web/dist/",
+    "plugins/golden-eye-pm/"
   ],
   "scripts": {
     "test": "node --test"
