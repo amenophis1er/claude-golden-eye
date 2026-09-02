@@ -12,6 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const Store = require('./state');
 const { tailTranscript, sessionStats, agentMeta, sessionReplay } = require('./transcript');
+const { listProjects, resolveProjectDir, listSessions, resolveTranscript } = require('./history');
 const { tasksForSession } = require('./tasks');
 const config = require('./config');
 
@@ -73,9 +74,9 @@ function maybeNotify(ev) {
     // Exception: the idle notification also fires when the main loop is only
     // waiting on background subagents; that resolves itself, so stay quiet.
     // Permission prompts pass through regardless of running agents.
-    const idleWhileAgentsRun =
-      /waiting for your input/i.test(String(p.message || '')) && p.__active_agents > 0;
-    if (!idleWhileAgentsRun) {
+    const idle =
+      p.notification_type === 'idle_prompt' || /waiting for your input/i.test(String(p.message || ''));
+    if (!(idle && p.__active_agents > 0)) {
       notifyDesktop('golden-eye: session needs you', String(p.message || ''));
     }
   } else if (ev.__hook === 'PreToolUse' && p.tool_name === 'AskUserQuestion' && !p.agent_id) {
@@ -112,6 +113,17 @@ function composerConfigured() {
   return CONFIG_FILE.composer === true;
 }
 const COMPOSER_ENABLED = composerConfigured();
+
+// Session history browser (read-only): lists every past transcript on disk,
+// which is broader exposure than the live-session tails — so it is opt-in
+// exactly like the composer: GOLDEN_EYE_HISTORY env wins, else config.json
+// {"history": true}.
+function historyConfigured() {
+  if (process.env.GOLDEN_EYE_HISTORY === '1') return true;
+  if (process.env.GOLDEN_EYE_HISTORY === '0') return false;
+  return CONFIG_FILE.history === true;
+}
+const HISTORY_ENABLED = historyConfigured();
 
 // Extra Host headers to accept beyond loopback (see hostAllowed). A reverse
 // proxy like `tailscale serve` forwards the original Host (e.g. the tailnet
@@ -372,7 +384,28 @@ const server = http.createServer(async (req, res) => {
           }
         }
       }
+      snapshot.historyEnabled = HISTORY_ENABLED;
       return sendJson(res, 200, snapshot);
+    }
+
+    // ---------- session history (read-only, opt-in) ----------
+    if (req.method === 'GET' && url.pathname === '/api/history') {
+      if (!HISTORY_ENABLED) return sendJson(res, 404, { error: 'history disabled (set {"history": true} in config.json)' });
+      return sendJson(res, 200, { projects: listProjects(store) });
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/history/sessions') {
+      if (!HISTORY_ENABLED) return sendJson(res, 404, { error: 'history disabled' });
+      const dir = resolveProjectDir(store, url.searchParams.get('dir'));
+      if (!dir) return sendJson(res, 400, { error: 'unknown project dir' });
+      return sendJson(res, 200, { dir, sessions: listSessions(store, dir) });
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/history/transcript') {
+      if (!HISTORY_ENABLED) return sendJson(res, 404, { error: 'history disabled' });
+      const file = resolveTranscript(store, url.searchParams.get('dir'), url.searchParams.get('id'));
+      if (!file) return sendJson(res, 400, { error: 'unknown project dir or session id' });
+      return sendJson(res, 200, { file, ...tailTranscript(file) });
     }
 
     if (req.method === 'GET' && url.pathname === '/api/events') {

@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
-import { Eye, Crown, GitFork, X, Trash2 } from 'lucide-react';
+import { Eye, Crown, GitFork, History, X, Trash2 } from 'lucide-react';
 import type { DashState, SessionInfo } from '../lib/types';
 import { pruneSessions } from '../lib/useDashboard';
-import { navigate, type Tab } from '../lib/router';
+import { navigate, navigateHistory, type Tab } from '../lib/router';
 import { baseName, relTime, shortId } from '../lib/format';
 import ThemeToggle from './ThemeToggle';
 
@@ -35,21 +35,24 @@ function Dot({ group }: { group: string }) {
   return <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${cls}`} />;
 }
 
-function Row({ s, now, selected, tab }: { s: SessionInfo; now: number; selected: boolean; tab: Tab }) {
-  const group = groupOf(s, now);
+function Row({ s, group, now, selected, tab }: {
+  s: SessionInfo; group: 'active' | 'idle' | 'stale'; now: number; selected: boolean; tab: Tab;
+}) {
   return (
     <div
-      className={`group flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors ${
+      className={`group flex cursor-pointer items-center gap-2.5 rounded-lg py-1.5 pr-2 pl-3 text-sm transition-colors ${
         selected
           ? 'bg-amber-100/70 text-amber-950 dark:bg-amber-400/10 dark:text-amber-100'
           : 'hover:bg-zinc-100 dark:hover:bg-zinc-900'
-      }`}
+      } ${group === 'stale' ? 'opacity-60' : ''}`}
       onClick={() => navigate(s.id, tab)}
     >
       <Dot group={group} />
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5 truncate font-medium">
-          {baseName(s.cwd)}
+        <div className="flex items-center gap-1.5 truncate text-[13px]">
+          <span className="min-w-0 truncate">
+            {s.lastPrompt ?? <span className="font-mono text-xs text-zinc-400">{shortId(s.id)}</span>}
+          </span>
           {s.pmMode && <Crown size={12} className="shrink-0 text-amber-500" />}
           {s.startSource === 'fork' && (
             <span title="forked session (background agent runner)" className="shrink-0">
@@ -77,27 +80,36 @@ function Row({ s, now, selected, tab }: { s: SessionInfo; now: number; selected:
   );
 }
 
-export default function Sidebar({ state, connected, now, selectedId, tab }: {
-  state: DashState | null; connected: boolean; now: number; selectedId: string | null; tab: Tab;
-}) {
-  const groups = useMemo(() => {
-    const g = { active: [] as SessionInfo[], idle: [] as SessionInfo[], stale: [] as SessionInfo[] };
-    for (const s of state?.sessions ?? []) g[groupOf(s, now)].push(s);
-    return g;
-  }, [state, now]);
+const GROUP_ORDER = { active: 0, idle: 1, stale: 2 } as const;
 
-  const section = (title: string, items: SessionInfo[], extra?: React.ReactNode) =>
-    items.length > 0 && (
-      <div className="mt-4 first:mt-0">
-        <div className="mb-1 flex items-center justify-between px-3">
-          <span className="text-[11px] font-semibold tracking-wider text-zinc-400 uppercase">{title}</span>
-          {extra}
-        </div>
-        {items.map((s) => (
-          <Row key={s.id} s={s} now={now} selected={s.id === selectedId} tab={tab} />
-        ))}
-      </div>
-    );
+export default function Sidebar({ state, connected, now, selectedId, tab, historyActive }: {
+  state: DashState | null; connected: boolean; now: number; selectedId: string | null; tab: Tab;
+  historyActive: boolean;
+}) {
+  // One block per project (cwd), newest activity first; sessions within a
+  // project ordered active → idle → stale so repeat sessions of the same
+  // repo no longer read as duplicate "projects".
+  const { projects, staleCount } = useMemo(() => {
+    const byCwd = new Map<string, { s: SessionInfo; group: 'active' | 'idle' | 'stale' }[]>();
+    let stale = 0;
+    for (const s of state?.sessions ?? []) {
+      const group = groupOf(s, now);
+      if (group === 'stale') stale++;
+      const key = s.cwd ?? '(unknown)';
+      if (!byCwd.has(key)) byCwd.set(key, []);
+      byCwd.get(key)!.push({ s, group });
+    }
+    const projects = [...byCwd.entries()].map(([cwd, rows]) => {
+      rows.sort(
+        (a, b) =>
+          GROUP_ORDER[a.group] - GROUP_ORDER[b.group] ||
+          Date.parse(b.s.lastActivity) - Date.parse(a.s.lastActivity)
+      );
+      return { cwd, rows, last: Math.max(...rows.map((r) => Date.parse(r.s.lastActivity))) };
+    });
+    projects.sort((a, b) => b.last - a.last);
+    return { projects, staleCount: stale };
+  }, [state, now]);
 
   return (
     <aside className="flex w-72 shrink-0 flex-col border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/40">
@@ -111,22 +123,48 @@ export default function Sidebar({ state, connected, now, selectedId, tab }: {
         <ThemeToggle />
       </div>
       <div className="flex-1 overflow-y-auto p-2">
-        {section('Active', groups.active)}
-        {section('Idle', groups.idle)}
-        {section(
-          'Stale',
-          groups.stale,
-          <button
-            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
-            onClick={() => pruneSessions({ staleBefore: new Date(now - STALE_MS).toISOString() })}
-          >
-            <Trash2 size={11} /> clear
-          </button>
+        {staleCount > 0 && (
+          <div className="mb-1 flex justify-end px-1">
+            <button
+              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+              onClick={() => pruneSessions({ staleBefore: new Date(now - STALE_MS).toISOString() })}
+            >
+              <Trash2 size={11} /> clear stale ({staleCount})
+            </button>
+          </div>
         )}
+        {projects.map(({ cwd, rows }) => (
+          <div key={cwd} className="mt-3 first:mt-0">
+            <div
+              className="mb-0.5 flex items-center justify-between px-3"
+              title={cwd}
+            >
+              <span className="truncate text-[11px] font-semibold tracking-wider text-zinc-400 uppercase">
+                {baseName(cwd)}
+              </span>
+              <span className="shrink-0 text-[10px] text-zinc-400 tabular-nums">{rows.length}</span>
+            </div>
+            {rows.map(({ s, group }) => (
+              <Row key={s.id} s={s} group={group} now={now} selected={!historyActive && s.id === selectedId} tab={tab} />
+            ))}
+          </div>
+        ))}
         {!state?.sessions.length && (
           <p className="px-3 py-6 text-center text-xs text-zinc-400">Waiting for sessions…</p>
         )}
       </div>
+      {state?.historyEnabled && (
+        <button
+          onClick={() => navigateHistory()}
+          className={`flex items-center gap-2 border-t border-zinc-200 px-4 py-2.5 text-sm transition-colors dark:border-zinc-800 ${
+            historyActive
+              ? 'bg-amber-100/70 font-medium text-amber-950 dark:bg-amber-400/10 dark:text-amber-100'
+              : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900'
+          }`}
+        >
+          <History size={14} /> History
+        </button>
+      )}
       <div className="border-t border-zinc-200 px-4 py-2 text-[11px] text-zinc-400 dark:border-zinc-800">
         {state ? `${state.sessions.length} session(s) · ${state.events.length} events cached` : 'connecting…'}
       </div>

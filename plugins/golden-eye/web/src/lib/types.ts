@@ -92,4 +92,23 @@ export interface DashState {
   generatedAt: string;
   sessions: SessionInfo[];
   events: HookEvent[];
+  /** Server opt-in for the read-only session history browser. */
+  historyEnabled?: boolean;
+}
+
+export interface HistoryProject {
+  dir: string;
+  cwd: string;
+  sessions: number;
+  lastActive: string | null;
+}
+
+export interface HistorySession {
+  id: string;
+  size: number;
+  mtime: string;
+  startedAt: string | null;
+  firstPrompt: string | null;
+  /** Session currently known live to the dashboard. */
+  live: boolean;
 }

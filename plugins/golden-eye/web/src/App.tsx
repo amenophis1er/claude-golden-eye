@@ -4,6 +4,7 @@ import { useDashboard } from './lib/useDashboard';
 import { navigate, useRoute } from './lib/router';
 import Sidebar from './components/Sidebar';
 import SessionView from './components/SessionView';
+import HistoryView from './components/HistoryView';
 
 export default function App() {
   const { state, connected } = useDashboard();
@@ -15,20 +16,29 @@ export default function App() {
   }, []);
 
   const session = useMemo(() => {
-    if (!state) return null;
+    if (!state || route.history) return null;
     return state.sessions.find((s) => s.id === route.sessionId) ?? state.sessions[0] ?? null;
-  }, [state, route.sessionId]);
+  }, [state, route.sessionId, route.history]);
 
   // Keep the URL canonical once data arrives (deep-linkable tabs).
   useEffect(() => {
-    if (session && route.sessionId !== session.id) navigate(session.id, route.tab, route.sub);
-  }, [session, route.sessionId, route.tab]);
+    if (!route.history && session && route.sessionId !== session.id) navigate(session.id, route.tab, route.sub);
+  }, [session, route.sessionId, route.tab, route.history]);
 
   return (
     <div className="flex h-screen bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
-      <Sidebar state={state} connected={connected} now={now} selectedId={session?.id ?? null} tab={route.tab} />
+      <Sidebar
+        state={state}
+        connected={connected}
+        now={now}
+        selectedId={session?.id ?? null}
+        tab={route.tab}
+        historyActive={!!route.history}
+      />
       <main className="flex min-w-0 flex-1 flex-col">
-        {session ? (
+        {route.history ? (
+          <HistoryView dir={route.history.dir} id={route.history.id} now={now} />
+        ) : session ? (
           <SessionView session={session} events={state?.events ?? []} tab={route.tab} sub={route.sub} now={now} />
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-zinc-400">

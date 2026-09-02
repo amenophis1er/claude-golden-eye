@@ -1,16 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowDownUp, Brain, MessageSquare, TerminalSquare, CornerDownRight, User } from 'lucide-react';
-import { clock, fmtTokens } from '../lib/format';
-import Markdown from './Markdown';
-
-interface TEntry {
-  ts: string | null;
-  kind: 'thinking' | 'text' | 'tool' | 'result' | 'user';
-  text?: string;
-  name?: string;
-  input?: Record<string, string> | null;
-  isError?: boolean;
-}
+import { ArrowDownUp } from 'lucide-react';
+import { fmtTokens } from '../lib/format';
+import TranscriptEntryList, { type TEntry } from './TranscriptEntryList';
 
 /**
  * Live tail of an agent's own JSONL transcript — thinking, assistant text,
@@ -93,11 +84,6 @@ export default function AgentTranscript({ sessionId, agentId, running, fill = fa
   if (!entries) return <p className="mt-1.5 text-[11px] text-zinc-400">loading…</p>;
   if (!entries.length) return <p className="mt-1.5 text-[11px] text-zinc-400">transcript is empty so far</p>;
 
-  // Stable keys (original index) so newest-first inserts don't remount —
-  // and re-parse — every row on each poll.
-  const indexed = entries.map((en, idx) => ({ en, idx }));
-  const shown = newestFirst ? [...indexed].reverse() : indexed;
-
   return (
     <div className={fill ? 'flex min-h-0 flex-1 flex-col' : ''}>
     {headerRow}
@@ -109,64 +95,7 @@ export default function AgentTranscript({ sessionId, agentId, running, fill = fa
       }}
       className={`mt-1.5 overflow-y-auto rounded-md border border-zinc-200 bg-white p-2 dark:border-zinc-800 dark:bg-zinc-950/60 ${fill ? 'min-h-0 flex-1' : 'max-h-96'}`}
     >
-      {shown.map(({ en, idx }) => {
-        const i = idx;
-        if (en.kind === 'thinking')
-          return (
-            <details key={i} className="my-1 rounded px-1.5 py-0.5">
-              <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] text-zinc-400 italic [&::-webkit-details-marker]:hidden">
-                <Brain size={11} className="shrink-0" /> thinking… <span className="not-italic">({(en.text ?? '').length} chars)</span>
-              </summary>
-              <p className="mt-1 ml-4 text-[11px] leading-relaxed whitespace-pre-wrap text-zinc-500 italic">{en.text}</p>
-            </details>
-          );
-        if (en.kind === 'user')
-          return (
-            <div key={i} className="my-2 flex gap-1.5 rounded-md bg-amber-50/70 px-1.5 py-1.5 dark:bg-amber-950/20">
-              <User size={11} className="mt-1 shrink-0 text-amber-500" />
-              <pre className="min-w-0 flex-1 font-sans text-[11px] leading-relaxed whitespace-pre-wrap">{en.text}</pre>
-              {en.ts && <span className="shrink-0 text-[10px] text-zinc-400 tabular-nums">{clock(en.ts)}</span>}
-            </div>
-          );
-        if (en.kind === 'text')
-          return (
-            <div key={i} className="my-2 flex gap-1.5 rounded-md bg-sky-50/60 px-1.5 py-1.5 dark:bg-sky-950/20">
-              <MessageSquare size={11} className="mt-1 shrink-0 text-sky-500" />
-              <Markdown text={en.text ?? ''} className="min-w-0 flex-1" />
-              {en.ts && <span className="shrink-0 text-[10px] text-zinc-400 tabular-nums">{clock(en.ts)}</span>}
-            </div>
-          );
-        if (en.kind === 'tool') {
-          const brief = en.input ? Object.values(en.input)[0] ?? '' : '';
-          return (
-            <div key={i} className="my-0.5 flex items-baseline gap-1.5 px-1.5">
-              <TerminalSquare size={11} className="relative top-0.5 shrink-0 text-violet-500" />
-              <span className="shrink-0 text-[11px] font-medium">{en.name}</span>
-              <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-zinc-500" title={brief}>{brief}</span>
-              {en.ts && <span className="shrink-0 text-[10px] text-zinc-400 tabular-nums">{clock(en.ts)}</span>}
-            </div>
-          );
-        }
-        const full = en.text ?? '';
-        const firstLine = full.split('\n')[0];
-        const expandable = full.length > firstLine.length || firstLine.length > 140;
-        if (!expandable)
-          return (
-            <div key={i} className="my-0.5 ml-4 flex gap-1.5 px-1.5">
-              <CornerDownRight size={11} className={`mt-0.5 shrink-0 ${en.isError ? 'text-red-400' : 'text-zinc-300 dark:text-zinc-600'}`} />
-              <pre className={`min-w-0 flex-1 truncate font-mono text-[10px] ${en.isError ? 'text-red-500' : 'text-zinc-400'}`}>{firstLine}</pre>
-            </div>
-          );
-        return (
-          <details key={i} className="my-0.5 ml-4 px-1.5">
-            <summary className="flex cursor-pointer list-none gap-1.5 [&::-webkit-details-marker]:hidden">
-              <CornerDownRight size={11} className={`mt-0.5 shrink-0 ${en.isError ? 'text-red-400' : 'text-zinc-300 dark:text-zinc-600'}`} />
-              <pre className={`min-w-0 flex-1 truncate font-mono text-[10px] ${en.isError ? 'text-red-500' : 'text-zinc-400'}`}>{firstLine} …</pre>
-            </summary>
-            <pre className={`mt-1 ml-4 max-h-48 overflow-auto rounded bg-zinc-100 p-2 font-mono text-[10px] leading-relaxed whitespace-pre-wrap dark:bg-zinc-900 ${en.isError ? 'text-red-500' : 'text-zinc-500'}`}>{full}</pre>
-          </details>
-        );
-      })}
+      <TranscriptEntryList entries={entries} newestFirst={newestFirst} />
     </div>
     </div>
   );

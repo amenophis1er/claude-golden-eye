@@ -269,4 +269,47 @@ function sessionReplay(file, beforeTs) {
   return value;
 }
 
-module.exports = { tailTranscript, sessionStats, agentMeta, sessionReplay };
+// ---------- head peek (history listings) ----------
+// Cheap identity read for a transcript: its cwd and opening prompt, from a
+// bounded read of the file head. Powers the history browser, where hundreds
+// of files may be listed — never a full parse. Cached by size+mtime.
+const HEAD_PEEK_BYTES = 64 * 1024;
+const headCache = new Map(); // path -> { key, value }
+
+function headPeek(file) {
+  let fd = null;
+  try {
+    const stat = fs.statSync(file);
+    const key = stat.size + ':' + stat.mtimeMs;
+    const hit = headCache.get(file);
+    if (hit && hit.key === key) return hit.value;
+    fd = fs.openSync(file, 'r');
+    const buf = Buffer.alloc(Math.min(stat.size, HEAD_PEEK_BYTES));
+    const n = fs.readSync(fd, buf, 0, buf.length, 0);
+    const value = { cwd: null, firstPrompt: null, firstTs: null };
+    for (const line of buf.toString('utf8', 0, n).split('\n')) {
+      if (!line.trim()) continue;
+      let j;
+      try { j = JSON.parse(line); } catch (_) { continue; }
+      if (!value.cwd && typeof j.cwd === 'string' && j.cwd) value.cwd = j.cwd;
+      if (!value.firstTs && j.timestamp) value.firstTs = j.timestamp;
+      if (!value.firstPrompt && j.type === 'user' && j.message && !j.isMeta) {
+        const text = flattenContent(j.message.content).trim();
+        // Same noise filter as parseLine: skip command expansions and
+        // hook/system-injected context stored as user turns.
+        if (text && !/^<(command-name|local-command-stdout|system-reminder)|^Caveat: The messages below/.test(text)) {
+          value.firstPrompt = SNIP(text.split('\n')[0], 200);
+        }
+      }
+      if (value.cwd && value.firstPrompt && value.firstTs) break;
+    }
+    headCache.set(file, { key, value });
+    return value;
+  } catch (_) {
+    return null;
+  } finally {
+    if (fd != null) try { fs.closeSync(fd); } catch (_) {}
+  }
+}
+
+module.exports = { tailTranscript, sessionStats, agentMeta, sessionReplay, headPeek };
