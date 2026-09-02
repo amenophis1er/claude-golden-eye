@@ -308,6 +308,15 @@ zero-dependency server — end users need no build step.
 - UI development: `cd plugins/golden-eye/web && npm install && npm run dev` (Vite
   proxies `/api` + `/pm` to `127.0.0.1:7717`). Ship with `npm run build` and commit
   `web/dist/`.
+- **Propagating code changes**: installed plugins run from a per-version cache
+  snapshot (`<config dir>/plugins/cache/claude-golden-eye/…`), and
+  `claude plugin update` skips same-version updates — so repo edits never reach
+  running installs on their own. Run `./scripts/dev-sync.sh` after changing
+  hook/server/web code: it rsyncs the working tree into every installed copy
+  (`$CLAUDE_CONFIG_DIR` and `~/.claude` by default; pass extra config dirs as
+  arguments) and restarts the dashboard server. Hook
+  scripts and the server pick the new code up immediately; hooks.json
+  registration and each session's MCP process still need a session restart.
 
 ## Always-on server (launchd)
 
