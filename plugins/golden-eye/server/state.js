@@ -134,6 +134,19 @@ class Store {
     ) {
       try { e.payload.__transcript_exists = fs.existsSync(e.payload.agent_transcript_path); } catch (_) {}
     }
+    // Same determinism rule for Notifications: whether subagents were still
+    // running when Claude Code fired its "waiting for your input" idle signal
+    // is decided once at ingest and persisted — consumers use it to tell a
+    // real walk-away moment from the main loop merely parking while a
+    // background delegation finishes (the session resumes by itself).
+    if (e.__hook === 'Notification' && e.payload.__active_agents === undefined && e.payload.session_id) {
+      const s = this.sessions.get(e.payload.session_id);
+      if (s) {
+        e.payload.__active_agents = Object.values(s.agents).filter(
+          (a) => !a.mainAgent && (a.status === 'running' || a.status === 'starting')
+        ).length;
+      }
+    }
     this.events.push(e);
     if (this.events.length > MAX_EVENTS_IN_MEMORY) {
       this.events = this.events.slice(-MAX_EVENTS_IN_MEMORY);

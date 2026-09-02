@@ -46,8 +46,17 @@ function baseEntry(e: HookEvent, nameFor: (id: string) => string): Omit<Entry, '
         };
       return { icon: MessageSquare, tone: 'text-sky-500', label: 'prompt', summary: String(p.prompt ?? '').slice(0, 200), raw: p, ts: e.__ts };
     }
-    case 'Notification':
+    case 'Notification': {
+      // Idle "waiting for your input" while subagents are still running is
+      // self-resolving (the session continues when they return) — show it
+      // muted instead of as a red attention row. __active_agents is stamped
+      // at server ingest; absent on old events, which keep the loud path.
+      const idleWhileAgentsRun =
+        /waiting for your input/i.test(String(p.message ?? '')) && Number(p.__active_agents) > 0;
+      if (idleWhileAgentsRun)
+        return { icon: BellRing, tone: 'text-zinc-500', label: 'idle · agents still running', summary: String(p.message ?? ''), raw: p, ts: e.__ts };
       return { icon: BellRing, tone: 'text-amber-500', label: 'needs you', summary: String(p.message ?? ''), raw: p, ts: e.__ts, emphasis: true };
+    }
     case 'PreToolUse': {
       if (p.tool_name === 'AskUserQuestion' && !p.agent_id) {
         const q = Array.isArray(p.tool_input?.questions) ? p.tool_input.questions[0] : null;

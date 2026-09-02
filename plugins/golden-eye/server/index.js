@@ -70,7 +70,14 @@ function maybeNotify(ev) {
   } else if (ev.__hook === 'Notification') {
     // Claude Code's own "needs your attention" signal (permission prompt,
     // waiting for input) — the walk-away case this dashboard exists for.
-    notifyDesktop('golden-eye: session needs you', String(p.message || ''));
+    // Exception: the idle notification also fires when the main loop is only
+    // waiting on background subagents; that resolves itself, so stay quiet.
+    // Permission prompts pass through regardless of running agents.
+    const idleWhileAgentsRun =
+      /waiting for your input/i.test(String(p.message || '')) && p.__active_agents > 0;
+    if (!idleWhileAgentsRun) {
+      notifyDesktop('golden-eye: session needs you', String(p.message || ''));
+    }
   } else if (ev.__hook === 'PreToolUse' && p.tool_name === 'AskUserQuestion' && !p.agent_id) {
     const q = p.tool_input && Array.isArray(p.tool_input.questions) && p.tool_input.questions[0];
     notifyDesktop('golden-eye: session is asking you a question', String((q && q.question) || ''));

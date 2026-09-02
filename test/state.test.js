@@ -361,3 +361,28 @@ test('AskUserQuestion lifecycle: open on Pre, cleared by Post / prompt / Stop', 
   add(store, 'PreToolUse', { tool_name: 'AskUserQuestion', tool_input: q, agent_id: 'ag1' });
   assert.equal(session(store).openQuestion, null);
 });
+
+test('Notification while subagents run is stamped __active_agents at ingest', () => {
+  const store = freshStore();
+  add(store, 'PreToolUse', {
+    tool_name: 'Agent',
+    tool_use_id: 'toolu_bg',
+    tool_input: { description: 'bg work', prompt: 'do it' },
+  });
+
+  // Main loop parks while the delegation runs — idle signal is not a real ask.
+  const during = add(store, 'Notification', { message: 'Claude is waiting for your input' });
+  assert.equal(during.payload.__active_agents, 1);
+
+  add(store, 'SubagentStop', {
+    agent_id: 'bg1',
+    last_assistant_message: 'done',
+    __transcript_exists: true,
+  });
+  const after = add(store, 'Notification', { message: 'Claude is waiting for your input' });
+  assert.equal(after.payload.__active_agents, 0);
+
+  // Replay determinism: a pre-stamped value is never recomputed.
+  const replayed = add(store, 'Notification', { message: 'Claude is waiting for your input', __active_agents: 3 });
+  assert.equal(replayed.payload.__active_agents, 3);
+});
