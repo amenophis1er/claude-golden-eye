@@ -62,6 +62,14 @@ export default function SessionView({ session: s, events, tab, sub, now }: {
           >
             {stateLabel}
           </span>
+          {s.isDirector && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-fuchsia-100 px-2 py-0.5 text-[11px] font-medium text-fuchsia-800 dark:bg-fuchsia-400/10 dark:text-fuchsia-300"
+              title="this session is the mission director — it receives worker events and steers other sessions"
+            >
+              <Crown size={11} /> DIRECTOR
+            </span>
+          )}
           {s.pmMode && (
             <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-400/10 dark:text-amber-300">
               <Crown size={11} /> PM engaged

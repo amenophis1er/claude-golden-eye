@@ -56,6 +56,8 @@ export interface SessionInfo {
   replay?: ReplayEntry[];
   /** Composer availability: server opt-in + this session's channel bridge live. */
   channelConnected?: boolean;
+  /** This session is an attached mission director (feat/director preview). */
+  isDirector?: boolean;
   /** Open tool-approval prompts relayed from the session (permission relay). */
   permissionRequests?: PermissionRequest[];
   /** In-flight AskUserQuestion dialog (display-only; answered in the terminal). */

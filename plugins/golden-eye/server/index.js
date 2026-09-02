@@ -136,6 +136,79 @@ function prunePermissions() {
 }
 const channelSubs = new Map(); // claude pid (string) -> ndjson response stream
 
+// ---------- director mode (feat preview) ----------
+// A session can register as DIRECTOR for a mission: the server then forwards
+// decision-worthy worker events into that session over its channel bridge.
+// The director is an ordinary Claude Code session running the /director
+// skill — all intelligence lives there; the server only routes.
+const DIRECTOR_WAKE_KINDS = new Set(['stop', 'blocked', 'question', 'permission', 'session-end']);
+const directors = new Map(); // claude pid (string) -> { sessionId, watch: 'all'|Set<sid>, wake: Set<kind> }
+
+function directorFor(pid) {
+  return pid != null ? directors.get(String(pid)) : undefined;
+}
+
+// Map a stored event to a director wake kind (or null = not decision-worthy).
+function wakeKindOf(ev) {
+  const p = ev.payload || {};
+  switch (ev.__hook) {
+    case 'Stop': return 'stop';
+    case 'SessionEnd': return 'session-end';
+    case 'MCPProgress': return p.state === 'blocked' ? 'blocked' : null;
+    case 'PermissionRequest': return 'permission';
+    case 'PreToolUse': return p.tool_name === 'AskUserQuestion' && !p.agent_id ? 'question' : null;
+    default: return null;
+  }
+}
+
+function directorDigest(kind, ev, sess) {
+  const p = ev.payload || {};
+  const sid = p.session_id || '?';
+  const who = sess && sess.cwd ? `${sid.slice(0, 8)} (${path.basename(sess.cwd)})` : sid.slice(0, 8);
+  const snip = (t) => String(t || '').replace(/\s+/g, ' ').slice(0, 400);
+  switch (kind) {
+    case 'stop': return `[worker ${who}] turn ended. Last output: ${snip(p.last_assistant_message) || '(none)'}`;
+    case 'session-end': return `[worker ${who}] session ended (${p.reason || 'unknown reason'}).`;
+    case 'blocked': return `[worker ${who}] BLOCKED${p.progress_pct != null ? ` at ${p.progress_pct}%` : ''}: ${snip(p.note) || '(no note)'}`;
+    case 'permission': return `[worker ${who}] wants permission: ${p.tool_name || '?'} — ${snip(p.description)} (request_id: ${p.request_id})`;
+    case 'question': {
+      const q = p.tool_input && Array.isArray(p.tool_input.questions) ? p.tool_input.questions[0] : null;
+      return `[worker ${who}] opened a terminal question dialog (NOT remotely answerable): ${snip(q && q.question)}`;
+    }
+    default: return `[worker ${who}] ${ev.__hook}`;
+  }
+}
+
+// Forward a stored event to any attached director whose policy matches.
+// Never forwards the director's own session (loop guard) and never forwards
+// action echoes (DashboardPrompt / PermissionVerdict / PMSync).
+function routeToDirectors(ev) {
+  if (!directors.size) return;
+  const kind = wakeKindOf(ev);
+  if (!kind) return;
+  const sid = ev.payload && ev.payload.session_id;
+  if (!sid) return;
+  const sess = store.sessions.get(sid) || null;
+  for (const [pid, d] of directors) {
+    if (d.sessionId === sid) continue; // own events never wake the director
+    if (d.watch !== 'all' && !d.watch.has(sid)) continue;
+    if (!d.wake.has(kind)) continue;
+    const sub = channelSubs.get(pid);
+    if (!sub) continue;
+    try {
+      sub.write(
+        JSON.stringify({
+          type: 'message',
+          text: directorDigest(kind, ev, sess),
+          meta: { sender: 'golden_eye_events', kind, session_id: sid },
+        }) + '\n'
+      );
+    } catch (_) {
+      channelSubs.delete(pid);
+    }
+  }
+}
+
 let composerToken = null;
 function getComposerToken() {
   if (composerToken) return composerToken;
@@ -266,6 +339,7 @@ const server = http.createServer(async (req, res) => {
       const ev = await readJsonBody(req);
       const stored = store.addEvent(ev);
       if (stored) broadcast(stored);
+      if (stored) routeToDirectors(stored);
       maybeNotify(stored);
       lastEventAt = Date.now();
       return sendJson(res, 200, { ok: true, ts: stored ? stored.__ts : null });
@@ -291,6 +365,7 @@ const server = http.createServer(async (req, res) => {
       if (candidates > 1) body.event.payload.ambiguous_sessions = candidates;
       const stored = store.addEvent(body.event);
       if (stored) broadcast(stored);
+      if (stored) routeToDirectors(stored);
       maybeNotify(stored);
       lastEventAt = Date.now();
       return sendJson(res, 200, { ok: !!stored, sessionId: best ? best.id : null, candidates });
@@ -324,6 +399,7 @@ const server = http.createServer(async (req, res) => {
         // Composer availability for this session: bridge connected right now.
         sess.channelConnected =
           COMPOSER_ENABLED && sess.claudePid != null && channelSubs.has(String(sess.claudePid));
+        sess.isDirector = !!directorFor(sess.claudePid);
         prunePermissions();
         const perms = sess.claudePid != null ? pendingPermissions.get(String(sess.claudePid)) : null;
         sess.permissionRequests = perms
@@ -424,6 +500,40 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true, pruned: ids });
     }
 
+    if (req.method === 'POST' && url.pathname === '/api/director/attach') {
+      // From the director session's MCP process (loopback). Registers the
+      // routing policy; events start flowing over its channel bridge.
+      if (!COMPOSER_ENABLED) return sendJson(res, 404, { error: 'composer disabled' });
+      const body = await readJsonBody(req);
+      const pid = body && body.pid != null ? String(body.pid) : null;
+      if (!pid) return sendJson(res, 400, { error: 'pid required' });
+      let sessionId = null;
+      for (const s of store.sessions.values()) if (String(s.claudePid) === pid) { sessionId = s.id; break; }
+      const watch =
+        Array.isArray(body.watch) && body.watch.length ? new Set(body.watch.map(String)) : 'all';
+      const wake = new Set(
+        (Array.isArray(body.wake) && body.wake.length ? body.wake : [...DIRECTOR_WAKE_KINDS]).filter((k) =>
+          DIRECTOR_WAKE_KINDS.has(k)
+        )
+      );
+      directors.set(pid, { sessionId, watch, wake });
+      lastEventAt = Date.now();
+      return sendJson(res, 200, {
+        ok: true,
+        sessionId,
+        watching: watch === 'all' ? 'all' : [...watch],
+        wake: [...wake],
+        bridgeConnected: channelSubs.has(pid),
+      });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/director/detach') {
+      const body = await readJsonBody(req);
+      const pid = body && body.pid != null ? String(body.pid) : null;
+      const had = pid ? directors.delete(pid) : false;
+      return sendJson(res, 200, { ok: true, detached: had });
+    }
+
     if (req.method === 'GET' && url.pathname === '/api/channel/subscribe') {
       // The per-session MCP channel process registers its bridge here.
       if (!COMPOSER_ENABLED) return sendJson(res, 404, { error: 'composer disabled (set GOLDEN_EYE_COMPOSER=1 on the server)' });
@@ -490,6 +600,7 @@ const server = http.createServer(async (req, res) => {
         payload: { session_id: sid, tool_name: r.tool_name || '', description: String(r.description || '').slice(0, 500), request_id: r.request_id },
       });
       if (ev) broadcast(ev);
+      if (ev) routeToDirectors(ev);
       lastEventAt = Date.now();
       return sendJson(res, 200, { ok: true, sessionId: sid });
     }

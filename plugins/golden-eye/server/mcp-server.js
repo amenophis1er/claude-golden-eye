@@ -153,6 +153,67 @@ const TOOLS = [
     description: 'golden-eye: fetch the current session mission, PM state, progress, and stats for self re-anchoring.',
     inputSchema: { type: 'object', properties: {} },
   },
+  // ---- director tools (used by the /director skill) ----
+  {
+    name: 'director_attach',
+    description:
+      'golden-eye director: register THIS session as the director. Worker events (turn ended, blocked, ' +
+      'question, permission request, session end) will arrive as golden-eye channel messages with ' +
+      'sender "golden_eye_events". Optional: watch (session-id list, default all) and wake (event kinds).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        watch: { type: 'array', items: { type: 'string' }, description: 'session ids to watch (omit = all sessions)' },
+        wake: {
+          type: 'array',
+          items: { type: 'string', enum: ['stop', 'blocked', 'question', 'permission', 'session-end'] },
+          description: 'event kinds that wake the director (omit = all kinds)',
+        },
+      },
+    },
+  },
+  {
+    name: 'director_detach',
+    description: 'golden-eye director: stop receiving worker events (mission over or paused).',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'list_sessions',
+    description:
+      'golden-eye director: compact digest of every observed session — id, project, state, PM mode, ' +
+      'mission, progress, open question, pending permission count, whether it can receive messages.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'send_to_session',
+    description:
+      'golden-eye director: inject a message into a worker session (arrives as a golden-eye channel ' +
+      'event, visible in its terminal, acted on as a turn). Requires that session to have a live ' +
+      'channel bridge (channelConnected in list_sessions).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_id: { type: 'string' },
+        text: { type: 'string' },
+      },
+      required: ['session_id', 'text'],
+    },
+  },
+  {
+    name: 'answer_permission',
+    description:
+      'golden-eye director: answer a relayed tool-approval prompt in a worker session. Use the ' +
+      'request_id from the wake event or list_sessions. behavior: allow | deny.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_id: { type: 'string' },
+        request_id: { type: 'string' },
+        behavior: { type: 'string', enum: ['allow', 'deny'] },
+      },
+      required: ['session_id', 'request_id', 'behavior'],
+    },
+  },
 ];
 
 // ---------- dashboard composer bridge (channel) ----------
@@ -193,7 +254,10 @@ function startChannelBridge() {
                 JSON.stringify({
                   jsonrpc: '2.0',
                   method: 'notifications/claude/channel',
-                  params: { content: m.text, meta: { sender: 'dashboard' } },
+                  // Server-supplied meta wins (e.g. sender: golden_eye_events
+                  // for director wake events); plain composer sends stay
+                  // attributed to the dashboard.
+                  params: { content: m.text, meta: Object.assign({ sender: 'dashboard' }, m.meta || {}) },
                 }) + '\n'
               );
             } else if (m && m.type === 'permission' && m.request_id && (m.behavior === 'allow' || m.behavior === 'deny')) {
@@ -294,6 +358,44 @@ async function handle(msg) {
         } else if (name === 'get_mission') {
           const r = await getMission();
           respond(id, { content: [{ type: 'text', text: JSON.stringify(r) }] });
+        } else if (name === 'director_attach') {
+          const r = await post('/api/director/attach', {
+            pid: process.ppid,
+            watch: Array.isArray(args.watch) ? args.watch : undefined,
+            wake: Array.isArray(args.wake) ? args.wake : undefined,
+          });
+          respond(id, { content: [{ type: 'text', text: JSON.stringify(r || { ok: false, error: 'server unreachable or composer disabled' }) }] });
+        } else if (name === 'director_detach') {
+          const r = await post('/api/director/detach', { pid: process.ppid });
+          respond(id, { content: [{ type: 'text', text: JSON.stringify(r || { ok: false }) }] });
+        } else if (name === 'list_sessions') {
+          const st = await fetchState();
+          const digest = st && Array.isArray(st.sessions)
+            ? st.sessions.map((s) => ({
+                id: s.id,
+                project: s.cwd,
+                state: s.state,
+                lastActivity: s.lastActivity,
+                pmMode: !!s.pmMode,
+                mission: s.mission || null,
+                progress: s.progress || null,
+                openQuestion: s.openQuestion ? s.openQuestion.questions.map((q) => q.question) : null,
+                pendingPermissions: (s.permissionRequests || []).map((r) => ({ request_id: r.request_id, tool: r.tool_name, description: r.description })),
+                channelConnected: !!s.channelConnected,
+                isDirector: !!s.isDirector,
+              }))
+            : null;
+          respond(id, { content: [{ type: 'text', text: JSON.stringify(digest || { error: 'server unreachable' }) }] });
+        } else if (name === 'send_to_session') {
+          const r = await post('/api/channel/send', { sessionId: args.session_id, text: args.text });
+          respond(id, { content: [{ type: 'text', text: JSON.stringify(r || { ok: false, error: 'server unreachable' }) }] });
+        } else if (name === 'answer_permission') {
+          const r = await post('/api/channel/verdict', {
+            sessionId: args.session_id,
+            requestId: args.request_id,
+            behavior: args.behavior,
+          });
+          respond(id, { content: [{ type: 'text', text: JSON.stringify(r || { ok: false, error: 'server unreachable' }) }] });
         } else {
           respondError(id, -32601, 'unknown tool: ' + name);
         }

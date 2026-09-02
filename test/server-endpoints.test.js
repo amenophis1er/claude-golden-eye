@@ -408,3 +408,96 @@ test('host allowlist: foreign Host is 403, but an allowlisted host passes (+ com
     srv.kill('SIGTERM');
   }
 });
+
+test('director: attach routes worker events over the bridge; own session + non-wake events excluded', async () => {
+  const http = require('http');
+  const DPID = '88888'; // director claude pid
+  const WSID = 'director-worker-session';
+  const DSID = 'director-own-session';
+
+  // Director's own session + a worker session, bound to pids.
+  for (const [sid, pid] of [[DSID, DPID], [WSID, '88899']]) {
+    await fetch(`${base}/ingest`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ __hook: 'SessionStart', __ts: new Date().toISOString(), __pid: Number(pid), payload: { session_id: sid, cwd: '/tmp/' + sid } }),
+    });
+  }
+
+  // Director's channel bridge.
+  const lines = [];
+  let onLine = null;
+  const sub = http.get(`${base}/api/channel/subscribe?pid=${DPID}`, (res) => {
+    let buf = '';
+    res.setEncoding('utf8');
+    res.on('data', (c) => {
+      buf += c;
+      let i;
+      while ((i = buf.indexOf('\n')) !== -1) {
+        const line = buf.slice(0, i).trim();
+        buf = buf.slice(i + 1);
+        if (line) { lines.push(JSON.parse(line)); onLine && onLine(); }
+      }
+    });
+  });
+  const waitFor = (pred) =>
+    new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error('timed out; got ' + JSON.stringify(lines))), 3000);
+      onLine = () => { if (lines.some(pred)) { clearTimeout(t); resolve(); } };
+      onLine();
+    });
+  await waitFor((l) => l.type === 'hello');
+
+  // Attach as director (all sessions, default wake kinds).
+  const at = await fetch(`${base}/api/director/attach`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ pid: Number(DPID) }),
+  });
+  const atJson = await at.json();
+  assert.equal(atJson.ok, true);
+  assert.equal(atJson.sessionId, DSID);
+
+  // Director flag visible in state.
+  const st = await (await fetch(`${base}/api/state`)).json();
+  assert.equal(st.sessions.find((x) => x.id === DSID).isDirector, true);
+
+  // A worker Stop wakes the director with a digest.
+  await fetch(`${base}/ingest`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ __hook: 'Stop', __ts: new Date().toISOString(), payload: { session_id: WSID, last_assistant_message: 'milestone one done' } }),
+  });
+  await waitFor((l) => l.type === 'message' && l.meta && l.meta.kind === 'stop' && l.meta.session_id === WSID && /milestone one done/.test(l.text));
+
+  // The director's OWN Stop must not wake it; a plain worker PreToolUse must not either.
+  await fetch(`${base}/ingest`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ __hook: 'Stop', __ts: new Date().toISOString(), payload: { session_id: DSID, last_assistant_message: 'director thinking' } }),
+  });
+  await fetch(`${base}/ingest`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ __hook: 'PreToolUse', __ts: new Date().toISOString(), payload: { session_id: WSID, tool_name: 'Bash', tool_input: {} } }),
+  });
+  // Blocked progress DOES wake — and proves the two above were skipped (ordering: streams are FIFO).
+  await fetch(`${base}/ingest`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ __hook: 'MCPProgress', __ts: new Date().toISOString(), payload: { session_id: WSID, state: 'blocked', note: 'need a decision' } }),
+  });
+  await waitFor((l) => l.meta && l.meta.kind === 'blocked');
+  assert.ok(!lines.some((l) => l.meta && l.meta.session_id === DSID), 'own-session event leaked to director');
+  assert.ok(!lines.some((l) => /director thinking/.test(l.text || '')), 'own Stop digest leaked');
+
+  // Detach stops the flow.
+  await fetch(`${base}/api/director/detach`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ pid: Number(DPID) }),
+  });
+  const st2 = await (await fetch(`${base}/api/state`)).json();
+  assert.equal(st2.sessions.find((x) => x.id === DSID).isDirector, false);
+  sub.destroy();
+});

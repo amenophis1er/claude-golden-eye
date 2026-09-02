@@ -167,6 +167,29 @@ must send the `X-Golden-Eye-Token` header matching
 `<data dir>/composer.token` (0600). No reply tool — the dashboard already
 sees the session's output passively.
 
+## Director mode (preview — `feat/director` branch only)
+
+`/director <mission>` turns a session into an autonomous **mission
+controller** for other sessions: it plans first into a `MISSION.md` tracking
+doc, attaches to the server (`director_attach`), then sleeps until a worker
+event wakes it — turn ended, `report_progress(blocked)`, permission request,
+question dialog, session end. On each wake it re-anchors from `MISSION.md`,
+judges progress, and acts through MCP tools (`list_sessions`,
+`send_to_session`, `answer_permission`), checking plan items off as evidence
+arrives. Run the director session on your strongest model with extended
+thinking.
+
+Guardrails are part of the charter: escalation to the human (desktop
+notification) for anything irreversible, out of scope, over budget, or
+looping; deny-by-default on dangerous permissions; the director's own events
+never wake it (loop guard, enforced server-side); the worker protocol routes
+questions through `report_progress(blocked)` because terminal question
+dialogs cannot be answered remotely. The director appears in the dashboard
+as a fuchsia `DIRECTOR` session — watch it deliberate, interrupt it anytime.
+
+Requires the composer opt-in plus the channels flag on the director *and*
+every steered worker session.
+
 ## Notifications
 
 Throttled (≥5 s) macOS notifications (`GOLDEN_EYE_NOTIFY=0` to disable): subagent finished ·
