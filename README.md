@@ -127,16 +127,28 @@ explicit opt-ins are required:
    - per-run: `GOLDEN_EYE_COMPOSER=1` (env wins over the file; `0` force-disables).
 2. Session side: channels are a research preview, so each session must start
    with `claude --dangerously-load-development-channels plugin:golden-eye@claude-golden-eye`
-   (full-screen warning; that's Anthropic's gate, not ours). Make it an
-   alias — either a dedicated one so ordinary sessions stay flag-free, or
-   shadow `claude` itself (safe: aliases don't recurse, and they don't apply
-   to scripts/non-interactive shells — the only cost is the consent dialog
-   at every interactive session start):
+   (full-screen warning; that's Anthropic's gate, not ours). Either keep a
+   dedicated alias so ordinary sessions stay flag-free:
 
    ```bash
-   # ~/.zshrc — pick one:
    alias claudege='claude --dangerously-load-development-channels plugin:golden-eye@claude-golden-eye'
-   alias claude='claude --dangerously-load-development-channels plugin:golden-eye@claude-golden-eye'
+   ```
+
+   …or shadow `claude` itself. Use a **function, not an alias** — a plain
+   alias also prefixes CLI subcommands (`claude plugin …` then misparses the
+   flag's arguments). The function adds the flag only for session starts;
+   scripts/non-interactive shells are unaffected either way:
+
+   ```bash
+   # ~/.zshrc
+   claude() {
+     case "$1" in
+       plugin|config|mcp|doctor|update|install|setup-token|migrate-installer|auth|login|logout)
+         command claude "$@";;
+       *)
+         command claude --dangerously-load-development-channels plugin:golden-eye@claude-golden-eye "$@";;
+     esac
+   }
    ```
 
 The composer box appears in a session's Live-tab rail only when both are true
