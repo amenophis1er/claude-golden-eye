@@ -337,3 +337,27 @@ test('tool_name "__proto__" cannot corrupt per-agent tool counts', () => {
   assert.equal(counts['__proto__'], 1);
   assert.equal(JSON.parse(JSON.stringify(counts))['__proto__'], 1);
 });
+
+test('AskUserQuestion lifecycle: open on Pre, cleared by Post / prompt / Stop', () => {
+  const q = { questions: [{ question: 'Which?', options: [{ label: 'A' }, { label: 'B' }] }] };
+  let store = freshStore();
+  add(store, 'PreToolUse', { tool_name: 'AskUserQuestion', tool_input: q });
+  assert.equal(session(store).openQuestion.questions[0].question, 'Which?');
+  add(store, 'PostToolUse', { tool_name: 'AskUserQuestion', tool_input: q, tool_response: {} });
+  assert.equal(session(store).openQuestion, null);
+
+  store = freshStore();
+  add(store, 'PreToolUse', { tool_name: 'AskUserQuestion', tool_input: q });
+  add(store, 'UserPromptSubmit', { prompt: 'dismissed it, moving on' });
+  assert.equal(session(store).openQuestion, null);
+
+  store = freshStore();
+  add(store, 'PreToolUse', { tool_name: 'AskUserQuestion', tool_input: q });
+  add(store, 'Stop', {});
+  assert.equal(session(store).openQuestion, null);
+
+  // A subagent asking (hypothetically) must not hijack the main card.
+  store = freshStore();
+  add(store, 'PreToolUse', { tool_name: 'AskUserQuestion', tool_input: q, agent_id: 'ag1' });
+  assert.equal(session(store).openQuestion, null);
+});

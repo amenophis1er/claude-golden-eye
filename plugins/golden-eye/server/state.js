@@ -177,6 +177,7 @@ class Store {
         tasks: [],
         startSource: null,
         claudePid: null,
+        openQuestion: null, // AskUserQuestion in-flight: {questions, at}
         pmMode: false,
         mission: null,
         subModel: null,
@@ -292,6 +293,7 @@ class Store {
         s.state = 'working';
         s.lastPrompt = typeof p.prompt === 'string' ? p.prompt : s.lastPrompt;
         s.lastPromptAt = e.__ts;
+        s.openQuestion = null; // a new prompt means any dialog was dismissed
         break;
       }
 
@@ -313,6 +315,12 @@ class Store {
           });
           s.stats.spawns += 1;
         } else {
+          // An in-flight AskUserQuestion blocks the session on terminal UI —
+          // surface it (display-only: no remote answer path exists).
+          if (tool === 'AskUserQuestion' && !p.agent_id) {
+            const qs = p.tool_input && Array.isArray(p.tool_input.questions) ? p.tool_input.questions : null;
+            if (qs) s.openQuestion = { questions: qs, at: e.__ts };
+          }
           // PreToolUse counts each attempt once (denied calls fire Pre but
           // never Post — a Pre-without-Post pair IS a denial signal).
           s.stats.toolCalls += 1;
@@ -337,6 +345,7 @@ class Store {
       case 'PostToolUse': {
         s.state = 'working'; // see PreToolUse note
         const tool = p.tool_name || '?';
+        if (tool === 'AskUserQuestion' && !p.agent_id) s.openQuestion = null; // answered
         if (SPAWN_TOOLS.has(tool)) {
           // Collection event: tool_response.agentId gives the DETERMINISTIC
           // spawn→child mapping. Child tool events / SubagentStop arrive
@@ -501,6 +510,7 @@ class Store {
         if (!(s.lastPromptAt && String(s.lastPromptAt) > String(e.__ts))) {
           s.state = 'idle';
         }
+        s.openQuestion = null; // turn over: rejected or answered dialogs are gone
         if (p.last_assistant_message != null) s.lastResult = p.last_assistant_message;
         break;
       }
@@ -526,6 +536,7 @@ class Store {
           state: s.state,
           startSource: s.startSource,
           claudePid: s.claudePid,
+          openQuestion: s.openQuestion || null,
           pmMode: !!s.pmMode,
           mission: s.mission || null,
           subModel: s.subModel || null,

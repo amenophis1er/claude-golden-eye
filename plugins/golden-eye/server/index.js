@@ -67,6 +67,13 @@ function maybeNotify(ev) {
     notifyDesktop('golden-eye: MISSION BLOCKED', String(p.note || ''));
   } else if (ev.__hook === 'Stop') {
     notifyDesktop('golden-eye: turn ended', String(p.last_assistant_message || ''));
+  } else if (ev.__hook === 'Notification') {
+    // Claude Code's own "needs your attention" signal (permission prompt,
+    // waiting for input) — the walk-away case this dashboard exists for.
+    notifyDesktop('golden-eye: session needs you', String(p.message || ''));
+  } else if (ev.__hook === 'PreToolUse' && p.tool_name === 'AskUserQuestion' && !p.agent_id) {
+    const q = p.tool_input && Array.isArray(p.tool_input.questions) && p.tool_input.questions[0];
+    notifyDesktop('golden-eye: session is asking you a question', String((q && q.question) || ''));
   }
 }
 

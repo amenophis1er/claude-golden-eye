@@ -128,6 +128,13 @@ The composer box appears in a session's Live-tab rail only when both are true
 as `DashboardPrompt` rows. Routing is deterministic: hooks and the MCP process
 share the claude process pid, so a message reaches exactly one session.
 
+**Question dialogs (`AskUserQuestion`) are display-only** — an open question
+shows as a blue card (question + numbered options, desktop notification), but
+the picker is the terminal's own UI: unlike permission prompts, Claude Code
+has no remote-answer mechanism for it, so you answer in the terminal and the
+card clears itself. Rejected tool calls no longer show as perpetually
+"running" in the feed (a later event from the same agent supersedes them).
+
 **Permission relay** — the channel also declares
 `claude/channel/permission`, so when Claude asks to run a gated tool
 (`Bash`, `Write`, …) the prompt appears as an amber card above the composer

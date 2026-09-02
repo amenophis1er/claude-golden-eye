@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ArrowDownToLine, ArrowDownUp, Bot, CheckCircle2, Circle, CircleDot, Flag, GitFork,
-  ListTodo, MessageSquare, Play, Power, Send, ShieldCheck, ShieldQuestion, ShieldX,
-  TerminalSquare, TrendingUp, User,
+  BellRing, ListTodo, MessageCircleQuestion, MessageSquare, Play, Power, Send,
+  ShieldCheck, ShieldQuestion, ShieldX, TerminalSquare, TrendingUp, User,
 } from 'lucide-react';
 import type { HookEvent, PermissionRequest, SessionInfo, Todo } from '../lib/types';
 import EventDetail from './EventDetail';
@@ -46,7 +46,13 @@ function baseEntry(e: HookEvent, nameFor: (id: string) => string): Omit<Entry, '
         };
       return { icon: MessageSquare, tone: 'text-sky-500', label: 'prompt', summary: String(p.prompt ?? '').slice(0, 200), raw: p, ts: e.__ts };
     }
+    case 'Notification':
+      return { icon: BellRing, tone: 'text-amber-500', label: 'needs you', summary: String(p.message ?? ''), raw: p, ts: e.__ts, emphasis: true };
     case 'PreToolUse': {
+      if (p.tool_name === 'AskUserQuestion' && !p.agent_id) {
+        const q = Array.isArray(p.tool_input?.questions) ? p.tool_input.questions[0] : null;
+        return { icon: MessageCircleQuestion, tone: 'text-amber-500', label: 'question for you', summary: q?.question ?? '', raw: p, ts: e.__ts, emphasis: true };
+      }
       const spawn = p.tool_name === 'Agent' || p.tool_name === 'Task';
       if (spawn)
         return { icon: GitFork, tone: 'text-violet-500', label: 'delegate', summary: p.tool_input?.description ?? toolSummary(p.tool_input), raw: p, ts: e.__ts };
@@ -341,11 +347,26 @@ export default function LiveFeed({ session, events, now }: { session: SessionInf
   const postIds = new Set(
     events.filter((e) => e.__hook === 'PostToolUse' && e.payload?.tool_use_id).map((e) => e.payload.tool_use_id)
   );
-  const isRunning = (en: Entry) =>
-    !!en.toolUseId &&
-    !postIds.has(en.toolUseId) &&
-    now - Date.parse(en.ts) < 30 * 60 * 1000 &&
-    (session.state === 'working' || session.state === 'active');
+  const isRunning = (en: Entry) => {
+    if (!en.toolUseId || postIds.has(en.toolUseId)) return false;
+    if (now - Date.parse(en.ts) >= 30 * 60 * 1000) return false;
+    if (!(session.state === 'working' || session.state === 'active')) return false;
+    // A REJECTED call also never emits Post. Agents run tools sequentially,
+    // so any later tool event / prompt / turn-end from the same agent proves
+    // this one is over — except background Bash, which really is concurrent.
+    if (!en.raw?.tool_input?.run_in_background) {
+      const aid = en.raw?.agent_id ?? null;
+      const superseded = events.some(
+        (e) =>
+          String(e.__ts) > String(en.ts) &&
+          (e.__hook === 'UserPromptSubmit' ||
+            e.__hook === 'Stop' ||
+            (e.__hook === 'PreToolUse' && (e.payload?.agent_id ?? null) === aid))
+      );
+      if (superseded) return false;
+    }
+    return true;
+  };
   const scroller = useRef<HTMLDivElement>(null);
   const [follow, setFollow] = useState(true);
   // newest-first is the monitoring default; chronological reads like a story.
@@ -421,10 +442,43 @@ export default function LiveFeed({ session, events, now }: { session: SessionInf
       </div>
       <OutputPanel session={session} />
       </div>
+      {session.openQuestion && <QuestionCard open={session.openQuestion} />}
       {session.channelConnected && (session.permissionRequests?.length ?? 0) > 0 && (
         <PermissionCards sessionId={session.id} requests={session.permissionRequests!} />
       )}
       {session.channelConnected && <Composer sessionId={session.id} />}
+    </div>
+  );
+}
+
+// An open AskUserQuestion dialog. Display-only: the picker is the terminal's
+// own UI and there is no remote-answer mechanism (unlike permission relay),
+// so this card's job is to show you WHAT is being asked and where. It clears
+// itself when the dialog is answered or dismissed (Post/Stop/next prompt).
+function QuestionCard({ open }: { open: NonNullable<SessionInfo['openQuestion']> }) {
+  return (
+    <div className="shrink-0 border-t border-sky-300 bg-sky-50/70 px-4 py-2.5 dark:border-sky-800 dark:bg-sky-950/30">
+      {open.questions.map((q, qi) => (
+        <div key={qi} className="flex items-start gap-2.5 py-1">
+          <MessageCircleQuestion size={14} className="mt-0.5 shrink-0 text-sky-500" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold">{q.question}</p>
+            {q.options && (
+              <ol className="mt-1 space-y-0.5">
+                {q.options.map((o, oi) => (
+                  <li key={oi} className="text-[11px] text-zinc-600 dark:text-zinc-400">
+                    <span className="font-medium text-zinc-800 dark:text-zinc-200">{oi + 1}. {o.label}</span>
+                    {o.description && <span className="text-zinc-400"> — {o.description}</span>}
+                  </li>
+                ))}
+              </ol>
+            )}
+            <p className="mt-1.5 text-[10px] text-zinc-400">
+              ⌨ answer in the terminal — question dialogs have no remote-answer path (unlike permission prompts)
+            </p>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

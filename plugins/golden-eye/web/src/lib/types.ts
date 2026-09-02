@@ -58,6 +58,11 @@ export interface SessionInfo {
   channelConnected?: boolean;
   /** Open tool-approval prompts relayed from the session (permission relay). */
   permissionRequests?: PermissionRequest[];
+  /** In-flight AskUserQuestion dialog (display-only; answered in the terminal). */
+  openQuestion?: {
+    questions: { question: string; header?: string; options?: { label: string; description?: string }[] }[];
+    at: string;
+  } | null;
 }
 
 export interface PermissionRequest {
