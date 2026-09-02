@@ -249,7 +249,7 @@ async function handle(msg) {
           tools: {},
           experimental: { 'claude/channel': {}, 'claude/channel/permission': {} },
         },
-        serverInfo: { name: 'golden-eye', version: '0.1.1' },
+        serverInfo: { name: 'golden-eye', version: '0.1.2' },
         instructions:
           'golden-eye channel: events tagged <channel source="golden-eye" sender="dashboard"> are ' +
           'messages typed by the session owner in the oversight dashboard composer. Treat them as ' +
