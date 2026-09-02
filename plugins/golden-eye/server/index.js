@@ -90,16 +90,36 @@ const sseClients = new Set();
 // persistent opt-in in <data dir>/config.json ({"composer": true}) — that
 // file survives every spawn path (SessionStart bootstrap, launchd, manual),
 // unlike an env var that GUI-launched sessions would not inherit.
+function readConfigFile() {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(config.DATA_DIR, 'config.json'), 'utf8')) || {};
+  } catch (_) {
+    return {};
+  }
+}
+const CONFIG_FILE = readConfigFile();
+
 function composerConfigured() {
   if (process.env.GOLDEN_EYE_COMPOSER === '1') return true;
   if (process.env.GOLDEN_EYE_COMPOSER === '0') return false;
-  try {
-    return JSON.parse(fs.readFileSync(path.join(config.DATA_DIR, 'config.json'), 'utf8')).composer === true;
-  } catch (_) {
-    return false; // no config file: composer stays off
-  }
+  return CONFIG_FILE.composer === true;
 }
 const COMPOSER_ENABLED = composerConfigured();
+
+// Extra Host headers to accept beyond loopback (see hostAllowed). A reverse
+// proxy like `tailscale serve` forwards the original Host (e.g. the tailnet
+// name), which the DNS-rebinding guard would otherwise reject. Allowlisting
+// an EXACT hostname you control is safe — an attacker cannot make a domain
+// they own resolve as your tailnet name. From GOLDEN_EYE_ALLOWED_HOSTS
+// (comma-separated) and/or config.json "allowedHosts": [...].
+const EXTRA_ALLOWED_HOSTS = new Set(
+  [
+    ...String(process.env.GOLDEN_EYE_ALLOWED_HOSTS || '').split(','),
+    ...(Array.isArray(CONFIG_FILE.allowedHosts) ? CONFIG_FILE.allowedHosts : []),
+  ]
+    .map((h) => String(h).trim().toLowerCase())
+    .filter(Boolean)
+);
 
 // Permission relay: open tool-approval prompts per claude pid. In-memory
 // only — a prompt answered in the terminal never notifies us, so entries
@@ -133,10 +153,18 @@ function getComposerToken() {
 
 // Direct loopback requests are the trusted path (Host is already validated).
 // A proxied request (e.g. `tailscale serve` adds X-Forwarded-*) can inject
-// prompts into sessions, so it must present the token from the data dir.
+// prompts into sessions, so it must EITHER arrive via an explicitly
+// allowlisted host (allowlisting a host = opting into trusting devices that
+// reach the server through it, e.g. your own tailnet) OR present the token
+// from the data dir. This is what lets the composer/approve-deny buttons
+// work from a phone browser on your tailnet, where custom headers aren't
+// practical — while an unknown proxy still needs the token.
 function composerAuthorized(req) {
   const proxied = !!(req.headers['x-forwarded-for'] || req.headers['x-forwarded-host']);
   if (!proxied) return true;
+  const fwdHost = String(req.headers['x-forwarded-host'] || req.headers.host || '')
+    .replace(/:\d+$/, '').replace(/^\[|\]$/g, '').toLowerCase();
+  if (fwdHost && EXTRA_ALLOWED_HOSTS.has(fwdHost)) return true;
   return req.headers['x-golden-eye-token'] === getComposerToken();
 }
 
@@ -211,8 +239,10 @@ setInterval(() => {
 // Host allowlist: the server is loopback-only, but browsers will happily send
 // requests to 127.0.0.1 on behalf of a hostile page via DNS rebinding (an
 // attacker domain resolving to 127.0.0.1 keeps the page same-origin with us).
-// Rejecting foreign Host headers closes that hole. Proxies that rewrite Host
-// (e.g. `tailscale serve`) present a loopback/localhost Host and still pass.
+// Rejecting foreign Host headers closes that hole. A reverse proxy such as
+// `tailscale serve` forwards the ORIGINAL Host (the tailnet name), so to reach
+// the dashboard over a tailnet you must allowlist that exact name via
+// GOLDEN_EYE_ALLOWED_HOSTS / config.json "allowedHosts" (see EXTRA_ALLOWED_HOSTS).
 function hostAllowed(hostHeader) {
   if (!hostHeader) return true; // HTTP/1.0 or same-box tooling without Host
   const name = hostHeader.replace(/:\d+$/, '').replace(/^\[|\]$/g, '').toLowerCase();
@@ -220,7 +250,8 @@ function hostAllowed(hostHeader) {
     name === '127.0.0.1' ||
     name === 'localhost' ||
     name === '::1' ||
-    name === HOST.toLowerCase()
+    name === HOST.toLowerCase() ||
+    EXTRA_ALLOWED_HOSTS.has(name)
   );
 }
 

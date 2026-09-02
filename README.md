@@ -236,6 +236,7 @@ delegation stats on the dashboard.
 | `GOLDEN_EYE_NOTIFY` | on | set `0` to disable notifications |
 | `GOLDEN_EYE_LOG_DIR` | `<data dir>/logs` | hooks' fallback JSONL log location |
 | `GOLDEN_EYE_COMPOSER` | off | `1` = enable the dashboard composer (channel injection) |
+| `GOLDEN_EYE_ALLOWED_HOSTS` | none | comma-separated extra `Host` values to accept (reverse proxies / tailnet name) |
 | `GOLDEN_EYE_DISABLE_POST` | unset | `1` = local logging only |
 
 ## Known limits
@@ -258,9 +259,11 @@ delegation stats on the dashboard.
 - The `--sub` model-pin rewrite answers `permissionDecision: "allow"` for the
   spawn it rewrites, so a pinned Agent/Task call bypasses any ask-rule you may
   have configured on that tool.
-- The dashboard API is loopback-only and rejects non-local `Host` headers, but
-  has no auth: any process on the machine can read session data. Keep that in
-  mind before proxying it anywhere (see the Tailscale section).
+- The dashboard API is loopback-only and rejects non-local `Host` headers
+  (DNS-rebinding guard); reverse proxies need their host allowlisted
+  (`GOLDEN_EYE_ALLOWED_HOSTS` / config.json `allowedHosts`). It has no auth
+  beyond that: any process on the machine, or any device reaching an
+  allowlisted host, can read session data. See the Tailscale section.
 - Probe rig and findings for the original hook-payload discovery: [probe/](probe/).
 
 ## Dashboard UI
@@ -303,13 +306,34 @@ The server binds 127.0.0.1 only. To reach it from other devices, proxy it onto
 your tailnet (tailnet-only, HTTPS, survives reboots):
 
 ```bash
-tailscale serve --bg http://127.0.0.1:7717
-# undo: tailscale serve reset
+# a spare HTTPS port keeps any existing `tailscale serve` on :443 intact
+tailscale serve --bg --https=8443 http://127.0.0.1:7717
+tailscale serve status        # shows the https://<name>.ts.net:8443 URL
+# undo: tailscale serve --https=8443 off
 ```
 
-Caveats: the dashboard has no auth of its own — anyone on the tailnet can view
-sessions and hit /pm & /api/prune. And the proxy targets :7717 specifically; if
-a port squatter ever pushes the server to a fallback port, re-point the proxy.
+**Required:** the server's DNS-rebinding guard rejects any non-loopback `Host`,
+and `tailscale serve` forwards the original tailnet name — so without this the
+dashboard 403s. Allowlist your tailnet host (find it in `tailscale serve
+status`) so the guard accepts it:
+
+```bash
+# merge into <data dir>/config.json (alongside "composer": true)
+{ "allowedHosts": ["<name>.<tailnet>.ts.net"] }
+# or per-run: GOLDEN_EYE_ALLOWED_HOSTS=<name>.<tailnet>.ts.net
+```
+
+Allowlisting a host also makes it a **trusted origin** for the composer and
+approve/deny buttons (a phone browser can't set the `X-Golden-Eye-Token`
+header, so this is what lets remote steering work). The rule: allowlisting a
+host = trusting devices that reach the server through it — i.e. your own
+tailnet is your auth boundary. Any *other* proxy origin still needs the token.
+
+Caveats: the dashboard has no auth of its own beyond that host trust — anyone
+on the tailnet can view sessions, hit /pm & /api/prune, and (if the composer is
+enabled) steer sessions. Leave `composer` off in config.json for view-only
+tailnet access. The proxy also targets :7717 specifically; if a port squatter
+pushes the server to a fallback port, re-point the proxy.
 
 ## Development
 

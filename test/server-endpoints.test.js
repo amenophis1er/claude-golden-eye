@@ -353,3 +353,58 @@ test('permission relay: verdict is gated like the composer (proxied needs token;
   });
   assert.equal(bad.status, 400);
 });
+
+test('host allowlist: foreign Host is 403, but an allowlisted host passes (+ composer without token)', async () => {
+  const http = require('http');
+  // undici (Node fetch) forbids overriding the Host header, so drive these
+  // with raw http.request — the same thing a reverse proxy / curl does.
+  const raw = (port, { method = 'GET', pathname = '/healthz', headers = {}, body = null } = {}) =>
+    new Promise((resolve, reject) => {
+      const req = http.request({ host: '127.0.0.1', port, method, path: pathname, headers }, (res) => {
+        res.resume();
+        res.on('end', () => resolve(res.statusCode));
+      });
+      req.on('error', reject);
+      if (body) req.write(body);
+      req.end();
+    });
+
+  const dataDir = path.join(tmp, 'data-hosts');
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(path.join(dataDir, 'config.json'), '{"composer": true, "allowedHosts": ["dash.example.ts.net"]}\n');
+  const port = await freePort();
+  const srv = spawn(process.execPath, [SERVER], {
+    env: { ...process.env, GOLDEN_EYE_DATA_DIR: dataDir, GOLDEN_EYE_PORT: String(port), GOLDEN_EYE_NOTIFY: '0' },
+    stdio: 'ignore',
+  });
+  try {
+    for (let i = 0; i < 50; i++) {
+      try { if ((await raw(port)) === 200) break; } catch (_) {}
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    // Foreign Host (DNS-rebinding shape) is rejected.
+    assert.equal(await raw(port, { headers: { host: 'evil.example.com' } }), 403);
+    // The allowlisted host passes the guard.
+    assert.equal(await raw(port, { headers: { host: 'dash.example.ts.net' } }), 200);
+    // A proxied request via the allowlisted host authorizes the composer with no token.
+    assert.equal(
+      await raw(port, {
+        method: 'POST', pathname: '/api/channel/send',
+        headers: { 'content-type': 'application/json', host: 'dash.example.ts.net', 'x-forwarded-host': 'dash.example.ts.net', 'x-forwarded-for': '100.64.0.2' },
+        body: JSON.stringify({ sessionId: 'nope', text: 'hi' }),
+      }),
+      404 // past auth → unknown session, NOT 403
+    );
+    // A different proxied host still needs the token.
+    assert.equal(
+      await raw(port, {
+        method: 'POST', pathname: '/api/channel/send',
+        headers: { 'content-type': 'application/json', host: 'dash.example.ts.net', 'x-forwarded-host': 'other.example.com', 'x-forwarded-for': '100.64.0.2' },
+        body: JSON.stringify({ sessionId: 'nope', text: 'hi' }),
+      }),
+      403
+    );
+  } finally {
+    srv.kill('SIGTERM');
+  }
+});
