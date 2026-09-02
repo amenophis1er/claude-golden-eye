@@ -1,5 +1,7 @@
 # claude golden-eye
 
+[![npm](https://img.shields.io/npm/v/claude-golden-eye)](https://www.npmjs.com/package/claude-golden-eye)
+
 A **live local dashboard** of what your Claude Code sessions are really doing —
 every agent spawned, every delegation, every tool call, live transcripts, plan,
 token/context usage. **View-only and passive**: the hooks observe, never
@@ -35,6 +37,21 @@ claude plugin install golden-eye-pm@claude-golden-eye     # optional PM mode
 claude plugin list                 # verify
 ```
 
+**From npm (users — pinned, versioned releases):**
+
+```bash
+npm install -g claude-golden-eye
+claude plugin marketplace add "$(npm root -g)/claude-golden-eye"
+claude plugin install golden-eye@claude-golden-eye
+claude plugin install golden-eye-pm@claude-golden-eye     # optional PM mode
+```
+
+(Claude Code marketplaces are added from a git host or a path — there is no
+npm marketplace *source* — so the npm package is installed globally first and
+the marketplace pointed at its files. Update with `npm update -g
+claude-golden-eye` followed by `claude plugin marketplace update
+claude-golden-eye`.)
+
 **From a local clone (development):**
 
 ```bash
@@ -43,12 +60,6 @@ claude plugin marketplace add "$PWD"
 claude plugin install golden-eye@claude-golden-eye
 claude plugin install golden-eye-pm@claude-golden-eye
 ```
-
-> npm note: Claude Code marketplaces are added from a git host or a path —
-> there is no npm marketplace source. If you install a published
-> `claude-golden-eye` package from npm, point the marketplace at the
-> installed files instead:
-> `npm install -g claude-golden-eye && claude plugin marketplace add "$(npm root -g)/claude-golden-eye"`.
 
 - Updates after edits: `claude plugin update golden-eye` (then restart sessions).
 - Disable/enable without uninstalling: `claude plugin disable|enable golden-eye`.
@@ -397,3 +408,20 @@ Without step 2 the last server keeps running until its 30-minute idle exit
   real server boot (agent-transcript path validation, static traversal).
 - The server self-identifies on `/healthz` (`name: "golden-eye"`); bootstrap only
   adopts servers that answer with it, so restart any pre-0.1.0 server after updating.
+
+## Releasing
+
+Publishing is automated via GitHub Actions + [npm trusted
+publishing](https://docs.npmjs.com/trusted-publishers) (OIDC — no tokens, no
+OTP). To cut a release:
+
+```bash
+# bump "version" in package.json, commit, then:
+git tag v0.1.1
+git push origin main --tags
+```
+
+`.github/workflows/release.yml` runs the tests, publishes to npm, and creates
+a GitHub release with generated notes. The trusted publisher is configured in
+the package's npmjs settings (repo `amenophis1er/claude-golden-eye`, workflow
+`release.yml`).
