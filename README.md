@@ -22,17 +22,33 @@ a live probe rig first — see [probe/FINDINGS.md](probe/FINDINGS.md).
 
 ---
 
-## Install locally (no publishing)
+## Install
 
-The repo is a self-contained marketplace.
+The repo is a self-contained marketplace; two ways to add it.
+
+**From GitHub (users — always the latest published version):**
 
 ```bash
-# from this repo's directory
-claude plugin marketplace add "$PWD"
+claude plugin marketplace add amenophis1er/claude-golden-eye
 claude plugin install golden-eye@claude-golden-eye        # the dashboard
 claude plugin install golden-eye-pm@claude-golden-eye     # optional PM mode
 claude plugin list                 # verify
 ```
+
+**From a local clone (development):**
+
+```bash
+# from this repo's directory
+claude plugin marketplace add "$PWD"
+claude plugin install golden-eye@claude-golden-eye
+claude plugin install golden-eye-pm@claude-golden-eye
+```
+
+> npm note: Claude Code marketplaces are added from a git host or a path —
+> there is no npm marketplace source. If you install a published
+> `claude-golden-eye` package from npm, point the marketplace at the
+> installed files instead:
+> `npm install -g claude-golden-eye && claude plugin marketplace add "$(npm root -g)/claude-golden-eye"`.
 
 - Updates after edits: `claude plugin update golden-eye` (then restart sessions).
 - Disable/enable without uninstalling: `claude plugin disable|enable golden-eye`.
@@ -337,7 +353,12 @@ pushes the server to a fallback port, re-point the proxy.
 
 ## Uninstall
 
-Complete teardown, in order (skip steps for pieces you never set up):
+**Easiest:** run `/golden-eye:uninstall` in any session — it walks the whole
+teardown (asks before deleting data, checks tailscale + aliases, then removes
+the plugins). The same script is runnable directly:
+`sh <plugin root>/deploy/uninstall.sh [--purge]`.
+
+Manual teardown, in order (skip steps for pieces you never set up):
 
 ```bash
 # 1. Remove the plugins + marketplace (stops new sessions from hooking in)
