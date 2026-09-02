@@ -11,7 +11,10 @@
   },
   "bugs": { "url": "https://github.com/amenophis1er/claude-golden-eye/issues" },
   "keywords": ["claude-code", "plugin", "monitoring", "observability", "dashboard", "hooks", "subagents"],
+  "bin": { "claude-golden-eye": "bin/cli.js" },
+  "engines": { "node": ">=18" },
   "files": [
+    "bin/",
     ".claude-plugin/",
     "plugins/golden-eye/.claude-plugin/",
     "plugins/golden-eye/hooks/",

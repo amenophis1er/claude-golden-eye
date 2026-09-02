@@ -26,31 +26,31 @@ a live probe rig first — see [probe/FINDINGS.md](probe/FINDINGS.md).
 
 ## Install
 
-The repo is a self-contained marketplace; two ways to add it.
+```bash
+npx claude-golden-eye init
+```
 
-**From GitHub (users — always the latest published version):**
+One command, no global install. It walks you through the optional pieces (PM
+mode, dashboard composer, session history, always-on launchd server), copies a
+pinned payload to `~/.golden-eye/app`, registers the marketplace + plugins via
+the `claude` CLI, writes the server opt-ins, and starts the dashboard. Safe
+defaults with `--yes` for scripts (`--pm --composer --history --launchd` to
+opt in non-interactively). It targets the current `CLAUDE_CONFIG_DIR`
+(default `~/.claude`); re-run with the env var set for a second instance.
+
+- **Upgrade:** `npx claude-golden-eye@latest init` (re-runs are idempotent)
+- **Remove:** `npx claude-golden-eye uninstall` (`--purge` also deletes data)
+
+**Without npm** — the repo is itself a Claude Code marketplace:
 
 ```bash
 claude plugin marketplace add amenophis1er/claude-golden-eye
 claude plugin install golden-eye@claude-golden-eye        # the dashboard
 claude plugin install golden-eye-pm@claude-golden-eye     # optional PM mode
-claude plugin list                 # verify
 ```
 
-**From npm (users — pinned, versioned releases):**
-
-```bash
-npm install -g claude-golden-eye
-claude plugin marketplace add "$(npm root -g)/claude-golden-eye"
-claude plugin install golden-eye@claude-golden-eye
-claude plugin install golden-eye-pm@claude-golden-eye     # optional PM mode
-```
-
-(Claude Code marketplaces are added from a git host or a path — there is no
-npm marketplace *source* — so the npm package is installed globally first and
-the marketplace pointed at its files. Update with `npm update -g
-claude-golden-eye` followed by `claude plugin marketplace update
-claude-golden-eye`.)
+The optional features then need their manual steps (config.json opt-ins,
+launchd script) described in their sections below.
 
 **From a local clone (development):**
 
@@ -299,9 +299,21 @@ React + Vite + Tailwind (lucide icons, light/dark mode, hash-routed deep links l
 `#/s/<session>/agents`). The built app is committed at `plugins/golden-eye/web/dist/` and served by the
 zero-dependency server — end users need no build step.
 
-- Sessions are grouped **Active / Idle / Stale** in the sidebar; stale ones can be
+- The sidebar groups sessions **by project** (cwd), newest activity first, with a
+  state dot per session (active / idle / stale) — several sessions of one repo no
+  longer read as duplicate projects. Stale sessions (and non-active forks) can be
   pruned per-session or in bulk (persisted as `SessionPrune` tombstones so a server
   restart doesn't resurrect them). A `SessionEnd` hook marks closed sessions.
+- **Session history (opt-in)** — a read-only browser over every past session's
+  transcript on disk: projects → sessions (first prompt, age, size) → transcript
+  viewer, with a copyable `claude --resume <id>` command. Discovery is derived
+  from observed transcript paths (no configured directories; multiple Claude
+  instances each surface their own transcript store, so the same project can
+  appear once per instance). Because it exposes *all* past transcripts — not
+  just live-session tails — it is off by default: enable with `"history": true`
+  in `~/.golden-eye/config.json` (or `GOLDEN_EYE_HISTORY=1`) and restart the
+  server. Server-side, a requested directory is only accepted when it resolves
+  to a direct child of a derived projects root.
 - The **Live** tab is the realtime view: a "now" strip of running agents (current
   tool + elapsed), an auto-following event feed (click any row for the raw payload),
   and a full-height panel with the main agent's latest prompt/output.
@@ -373,7 +385,10 @@ pushes the server to a fallback port, re-point the proxy.
 
 ## Uninstall
 
-**Easiest:** run `/golden-eye:uninstall` in any session — it walks the whole
+**Installed via npx?** `npx claude-golden-eye uninstall` (add `--purge` to
+also delete `~/.golden-eye`) does the whole teardown.
+
+**Or:** run `/golden-eye:uninstall` in any session — it walks the whole
 teardown (asks before deleting data, checks tailscale + aliases, then removes
 the plugins). The same script is runnable directly:
 `sh <plugin root>/deploy/uninstall.sh [--purge]`.
