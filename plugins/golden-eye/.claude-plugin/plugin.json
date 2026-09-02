@@ -1,7 +1,7 @@
 {
   "name": "golden-eye",
   "description": "Live, view-only oversight of Claude Code sessions: passive hooks feed a local dashboard (agents, transcripts, plan, tokens). Zero runtime dependencies; never alters a session.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": { "name": "Amen" },
   "license": "MIT",
   "homepage": "https://github.com/amenophis1er/claude-golden-eye#readme",
