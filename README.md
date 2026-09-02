@@ -36,8 +36,8 @@ claude plugin list                 # verify
 
 - Updates after edits: `claude plugin update golden-eye` (then restart sessions).
 - Disable/enable without uninstalling: `claude plugin disable|enable golden-eye`.
-- Remove: `claude plugin uninstall golden-eye` (same for `golden-eye-pm`) and
-  `claude plugin marketplace remove claude-golden-eye`.
+- Remove: see [Uninstall](#uninstall) — plugin removal alone leaves the server
+  running and its data behind.
 - Note: the marketplace source is this directory. After code edits run
   `claude plugin marketplace update claude-golden-eye` (or reinstall) so the
   installed copy picks them up; restart sessions to reload hooks/MCP.
@@ -334,6 +334,38 @@ on the tailnet can view sessions, hit /pm & /api/prune, and (if the composer is
 enabled) steer sessions. Leave `composer` off in config.json for view-only
 tailnet access. The proxy also targets :7717 specifically; if a port squatter
 pushes the server to a fallback port, re-point the proxy.
+
+## Uninstall
+
+Complete teardown, in order (skip steps for pieces you never set up):
+
+```bash
+# 1. Remove the plugins + marketplace (stops new sessions from hooking in)
+claude plugin uninstall golden-eye@claude-golden-eye
+claude plugin uninstall golden-eye-pm@claude-golden-eye
+claude plugin marketplace remove claude-golden-eye
+
+# 2. Stop the running server (it outlives sessions by design)
+kill "$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.env.HOME+"/.golden-eye/server.json","utf8")).pid)' 2>/dev/null)" 2>/dev/null
+
+# 3. launchd (only if you ran install-launchd.sh)
+launchctl bootout "gui/$(id -u)/com.golden-eye.server" 2>/dev/null
+rm -f ~/Library/LaunchAgents/com.golden-eye.server.plist
+
+# 4. Tailscale proxy (only if you served the dashboard)
+tailscale serve --https=443 off    # or whichever port you mapped
+
+# 5. Data: event log, server/lock files, hook logs, composer token, config
+rm -rf ~/.golden-eye
+
+# 6. Shell alias (only if you added one) — delete the golden-eye lines
+#    from ~/.zshrc (the `claude`/`claudege` alias for the channels flag)
+```
+
+Restart any open Claude Code sessions afterwards — hooks and the MCP channel
+load at SessionStart, so live sessions keep their observers until restarted.
+Without step 2 the last server keeps running until its 30-minute idle exit
+(forever under launchd); without step 5 your session history stays on disk.
 
 ## Development
 
