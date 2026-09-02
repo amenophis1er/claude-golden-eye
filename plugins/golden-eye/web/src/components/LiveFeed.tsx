@@ -227,7 +227,6 @@ function OutputPanel({ session }: { session: SessionInfo }) {
         )}
       </section>
       <PlanRail todos={session.todos} />
-      {session.channelConnected && <Composer sessionId={session.id} />}
     </div>
   );
 }
@@ -266,31 +265,33 @@ function Composer({ sessionId }: { sessionId: string }) {
   };
 
   return (
-    <section className="shrink-0 border-t border-zinc-200 pt-3 dark:border-zinc-800">
-      <h3 className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-zinc-400 uppercase">
-        <Send size={11} /> Message session
-      </h3>
-      <textarea
-        value={text}
-        onChange={(e) => { setText(e.target.value); setStatus(null); }}
-        onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); send(); } }}
-        rows={2}
-        placeholder="Steer the session… (⌘⏎ to send)"
-        className="w-full resize-y rounded-lg border border-zinc-200 bg-white p-2 text-xs focus:border-amber-400 focus:outline-none dark:border-zinc-800 dark:bg-zinc-900"
-      />
-      <div className="mt-1 flex items-center justify-between gap-2">
-        <span className={`min-w-0 truncate text-[10px] ${status?.kind === 'err' ? 'text-red-500' : 'text-zinc-400'}`}>
-          {status?.msg ?? 'arrives as a golden-eye channel event'}
-        </span>
+    <div className="shrink-0 border-t border-zinc-200 bg-white px-4 py-2.5 dark:border-zinc-800 dark:bg-zinc-900/40">
+      <div className="flex items-end gap-2.5">
+        <Send size={13} className="mb-2 shrink-0 text-zinc-400" />
+        <textarea
+          value={text}
+          onChange={(e) => { setText(e.target.value); setStatus(null); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+          }}
+          rows={Math.min(4, Math.max(1, text.split('\n').length))}
+          placeholder="Message this session… (⏎ to send, ⇧⏎ for a new line)"
+          className="max-h-32 flex-1 resize-none rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs leading-relaxed focus:border-amber-400 focus:outline-none dark:border-zinc-800 dark:bg-zinc-900"
+        />
         <button
           onClick={send}
           disabled={busy || !text.trim()}
-          className="shrink-0 rounded-lg bg-zinc-900 px-3 py-1 text-[11px] font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
+          className="shrink-0 rounded-lg bg-zinc-900 px-3.5 py-1.5 text-[11px] font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
         >
           {busy ? 'sending…' : 'send'}
         </button>
       </div>
-    </section>
+      {status && (
+        <p className={`mt-1 ml-6 text-[10px] ${status.kind === 'err' ? 'text-red-500' : 'text-zinc-400'}`}>
+          {status.msg}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -359,7 +360,8 @@ export default function LiveFeed({ session, events, now }: { session: SessionInf
   };
 
   return (
-    <div className="flex h-full min-h-0">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex min-h-0 flex-1">
       <div className="relative flex min-w-0 flex-1 flex-col">
         <NowStrip session={session} now={now} />
         <div className="flex justify-end border-b border-zinc-200 px-4 py-1 dark:border-zinc-800">
@@ -408,6 +410,8 @@ export default function LiveFeed({ session, events, now }: { session: SessionInf
         )}
       </div>
       <OutputPanel session={session} />
+      </div>
+      {session.channelConnected && <Composer sessionId={session.id} />}
     </div>
   );
 }
