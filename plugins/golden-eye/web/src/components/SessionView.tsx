@@ -41,7 +41,7 @@ export default function SessionView({ session: s, events, tab, sub, now }: {
     : s.state === 'working' || s.state === 'active'
       ? 'stalled'
       : s.state === 'idle'
-        ? 'waiting for you'
+        ? 'your turn'
         : s.state;
 
   return (
@@ -55,7 +55,7 @@ export default function SessionView({ session: s, events, tab, sub, now }: {
             className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
               working
                 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                : stateLabel === 'waiting for you'
+                : stateLabel === 'your turn'
                   ? 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300'
                   : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'
             }`}

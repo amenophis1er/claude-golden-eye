@@ -47,14 +47,26 @@ function baseEntry(e: HookEvent, nameFor: (id: string) => string): Omit<Entry, '
       return { icon: MessageSquare, tone: 'text-sky-500', label: 'prompt', summary: String(p.prompt ?? '').slice(0, 200), raw: p, ts: e.__ts };
     }
     case 'Notification': {
-      // Idle "waiting for your input" while subagents are still running is
-      // self-resolving (the session continues when they return) — show it
-      // muted instead of as a red attention row. __active_agents is stamped
-      // at server ingest; absent on old events, which keep the loud path.
-      const idleWhileAgentsRun =
-        /waiting for your input/i.test(String(p.message ?? '')) && Number(p.__active_agents) > 0;
-      if (idleWhileAgentsRun)
-        return { icon: BellRing, tone: 'text-zinc-500', label: 'idle · agents still running', summary: String(p.message ?? ''), raw: p, ts: e.__ts };
+      // The idle prompt ("Claude is waiting for your input", 60s after a turn
+      // ends) is redundant in the feed — the session header already says
+      // "waiting for you" — so it always renders muted, never as a red
+      // attention row. notification_type is Claude Code's own discriminator;
+      // the message regex covers older payloads without it.
+      const idle =
+        p.notification_type === 'idle_prompt' || /waiting for your input/i.test(String(p.message ?? ''));
+      if (idle) {
+        const busy = Number(p.__active_agents) > 0; // stamped at server ingest
+        return {
+          icon: BellRing,
+          tone: 'text-zinc-500',
+          label: busy ? 'idle · agents still running' : 'idle',
+          // Neutral phrasing over the payload's "Claude is waiting for your
+          // input" — the turn-ended row above already covers completion.
+          summary: busy ? 'main turn finished · delegations still running' : 'turn finished · no reply yet',
+          raw: p, ts: e.__ts,
+        };
+      }
+      // Everything else (permission prompts etc.) is a real attention ask.
       return { icon: BellRing, tone: 'text-amber-500', label: 'needs you', summary: String(p.message ?? ''), raw: p, ts: e.__ts, emphasis: true };
     }
     case 'PreToolUse': {
