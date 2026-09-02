@@ -93,6 +93,20 @@ function composerConfigured() {
   }
 }
 const COMPOSER_ENABLED = composerConfigured();
+
+// Permission relay: open tool-approval prompts per claude pid. In-memory
+// only — a prompt answered in the terminal never notifies us, so entries
+// expire instead of resolving (Claude Code drops stale-id verdicts safely).
+const PERMISSION_TTL_MS = 10 * 60 * 1000;
+const pendingPermissions = new Map(); // claude pid (string) -> Map(request_id -> {request, at})
+
+function prunePermissions() {
+  const cutoff = Date.now() - PERMISSION_TTL_MS;
+  for (const [pid, reqs] of pendingPermissions) {
+    for (const [id, r] of reqs) if (r.at < cutoff) reqs.delete(id);
+    if (!reqs.size) pendingPermissions.delete(pid);
+  }
+}
 const channelSubs = new Map(); // claude pid (string) -> ndjson response stream
 
 let composerToken = null;
@@ -272,6 +286,11 @@ const server = http.createServer(async (req, res) => {
         // Composer availability for this session: bridge connected right now.
         sess.channelConnected =
           COMPOSER_ENABLED && sess.claudePid != null && channelSubs.has(String(sess.claudePid));
+        prunePermissions();
+        const perms = sess.claudePid != null ? pendingPermissions.get(String(sess.claudePid)) : null;
+        sess.permissionRequests = perms
+          ? [...perms.values()].map((p) => ({ ...p.request, at: new Date(p.at).toISOString() }))
+          : [];
         const tasks = tasksForSession(sess.id, sess.transcriptPath);
         if (tasks) sess.todos = tasks;
         sess.env = sessionStats(sess.transcriptPath); // branch/model/tokens/context
@@ -401,6 +420,70 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 502, { error: 'bridge write failed — retry' });
       }
       const ev = store.addEvent({ __hook: 'DashboardPrompt', payload: { session_id: sid, prompt: text } });
+      if (ev) broadcast(ev);
+      lastEventAt = Date.now();
+      return sendJson(res, 200, { ok: true });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/channel/permission-request') {
+      // From a session's MCP channel process: Claude Code relayed an open
+      // tool-approval prompt. Loopback-only by nature (the mcp process).
+      if (!COMPOSER_ENABLED) return sendJson(res, 404, { error: 'composer disabled' });
+      const body = await readJsonBody(req);
+      const pid = body && body.pid != null ? String(body.pid) : null;
+      const r = body && body.request;
+      if (!pid || !r || !r.request_id) return sendJson(res, 400, { error: 'pid + request.request_id required' });
+      let reqs = pendingPermissions.get(pid);
+      if (!reqs) pendingPermissions.set(pid, (reqs = new Map()));
+      reqs.set(String(r.request_id), {
+        request: {
+          request_id: String(r.request_id),
+          tool_name: String(r.tool_name || ''),
+          description: String(r.description || '').slice(0, 4000),
+          input_preview: String(r.input_preview || '').slice(0, 8000),
+        },
+        at: Date.now(),
+      });
+      // Attribute in the feed + wake the dashboard.
+      let sid = null;
+      for (const s of store.sessions.values()) if (String(s.claudePid) === pid) { sid = s.id; break; }
+      const ev = store.addEvent({
+        __hook: 'PermissionRequest',
+        payload: { session_id: sid, tool_name: r.tool_name || '', description: String(r.description || '').slice(0, 500), request_id: r.request_id },
+      });
+      if (ev) broadcast(ev);
+      lastEventAt = Date.now();
+      return sendJson(res, 200, { ok: true, sessionId: sid });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/channel/verdict') {
+      // Dashboard answers a relayed prompt. Same gate as the composer:
+      // verdicts approve tool use, so proxied requests need the token.
+      if (!COMPOSER_ENABLED) return sendJson(res, 404, { error: 'composer disabled' });
+      if (!composerAuthorized(req)) return sendJson(res, 403, { error: 'proxied access requires X-Golden-Eye-Token' });
+      const body = await readJsonBody(req);
+      const sid = body && body.sessionId;
+      const requestId = body && body.requestId != null ? String(body.requestId) : null;
+      const behavior = body && (body.behavior === 'allow' || body.behavior === 'deny') ? body.behavior : null;
+      if (!sid || !requestId || !behavior) return sendJson(res, 400, { error: 'sessionId + requestId + behavior(allow|deny) required' });
+      const s = store.sessions.get(sid);
+      if (!s) return sendJson(res, 404, { error: 'unknown session' });
+      const pid = s.claudePid != null ? String(s.claudePid) : null;
+      const sub = pid ? channelSubs.get(pid) : null;
+      if (!sub) return sendJson(res, 409, { error: 'no channel bridge for this session' });
+      try {
+        sub.write(JSON.stringify({ type: 'permission', request_id: requestId, behavior }) + '\n');
+      } catch (_) {
+        channelSubs.delete(pid);
+        return sendJson(res, 502, { error: 'bridge write failed — retry' });
+      }
+      const reqs = pendingPermissions.get(pid);
+      const known = reqs ? reqs.get(requestId) : null;
+      if (reqs) { reqs.delete(requestId); if (!reqs.size) pendingPermissions.delete(pid); }
+      const ev = store.addEvent({
+        __hook: 'PermissionVerdict',
+        payload: { session_id: sid, request_id: requestId, behavior, tool_name: (known && known.request.tool_name) || null },
+      });
       if (ev) broadcast(ev);
       lastEventAt = Date.now();
       return sendJson(res, 200, { ok: true });

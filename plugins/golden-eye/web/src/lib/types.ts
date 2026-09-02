@@ -56,6 +56,16 @@ export interface SessionInfo {
   replay?: ReplayEntry[];
   /** Composer availability: server opt-in + this session's channel bridge live. */
   channelConnected?: boolean;
+  /** Open tool-approval prompts relayed from the session (permission relay). */
+  permissionRequests?: PermissionRequest[];
+}
+
+export interface PermissionRequest {
+  request_id: string;
+  tool_name: string;
+  description: string;
+  input_preview: string;
+  at: string;
 }
 
 export interface ReplayEntry {

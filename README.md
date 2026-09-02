@@ -128,11 +128,20 @@ The composer box appears in a session's Live-tab rail only when both are true
 as `DashboardPrompt` rows. Routing is deterministic: hooks and the MCP process
 share the claude process pid, so a message reaches exactly one session.
 
-Security: the composer lets whoever reaches the HTTP port steer your sessions.
-Direct loopback requests are trusted (Host-checked); **proxied** requests
-(e.g. `tailscale serve` — they carry `X-Forwarded-*`) must send the
-`X-Golden-Eye-Token` header matching `<data dir>/composer.token` (0600).
-One-way by design: no reply tool, no permission relay — the dashboard already
+**Permission relay** — the channel also declares
+`claude/channel/permission`, so when Claude asks to run a gated tool
+(`Bash`, `Write`, …) the prompt appears as an amber card above the composer
+with **allow / deny** buttons. Both stay live: answer in the terminal or on
+the dashboard, first verdict wins (Claude Code drops the loser by request
+id). Cards expire after 10 minutes — a prompt answered locally never
+notifies us, so stale cards age out instead of resolving; a stale verdict is
+dropped safely by Claude Code.
+
+Security: the composer steers sessions and verdicts approve tool use, so both
+share one gate. Direct loopback requests are trusted (Host-checked);
+**proxied** requests (e.g. `tailscale serve` — they carry `X-Forwarded-*`)
+must send the `X-Golden-Eye-Token` header matching
+`<data dir>/composer.token` (0600). No reply tool — the dashboard already
 sees the session's output passively.
 
 ## Notifications

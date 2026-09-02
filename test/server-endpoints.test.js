@@ -275,3 +275,81 @@ test('composer: {"composer": true} in <data dir>/config.json enables it without 
     cfg.kill('SIGTERM');
   }
 });
+
+test('permission relay: request -> pending in state -> verdict routed + cleared', async () => {
+  const http = require('http');
+  const PID = '77777';
+  const PSID = 'perm-test-session';
+
+  // Session bound to the pid, with a live bridge subscription.
+  await fetch(`${base}/ingest`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ __hook: 'SessionStart', __ts: new Date().toISOString(), __pid: Number(PID), payload: { session_id: PSID, cwd: '/tmp/perm' } }),
+  });
+  const lines = [];
+  let onLine = null;
+  const sub = http.get(`${base}/api/channel/subscribe?pid=${PID}`, (res) => {
+    let buf = '';
+    res.setEncoding('utf8');
+    res.on('data', (c) => {
+      buf += c;
+      let i;
+      while ((i = buf.indexOf('\n')) !== -1) {
+        const line = buf.slice(0, i).trim();
+        buf = buf.slice(i + 1);
+        if (line) { lines.push(JSON.parse(line)); onLine && onLine(); }
+      }
+    });
+  });
+  const waitFor = (pred) =>
+    new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error('timed out; got ' + JSON.stringify(lines))), 3000);
+      onLine = () => { if (lines.some(pred)) { clearTimeout(t); resolve(); } };
+      onLine();
+    });
+  await waitFor((l) => l.type === 'hello');
+
+  // The mcp process relays an open prompt.
+  const pr = await fetch(`${base}/api/channel/permission-request`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ pid: Number(PID), request: { request_id: 'abcde', tool_name: 'Bash', description: 'Run tests', input_preview: '{"command":"npm test"}' } }),
+  });
+  assert.equal(pr.status, 200);
+  assert.equal((await pr.json()).sessionId, PSID);
+
+  // Pending request visible on the session.
+  const st = await (await fetch(`${base}/api/state`)).json();
+  const sess = st.sessions.find((x) => x.id === PSID);
+  assert.equal(sess.permissionRequests.length, 1);
+  assert.equal(sess.permissionRequests[0].request_id, 'abcde');
+
+  // Dashboard answers: verdict reaches the bridge, pending clears, feed logs it.
+  const v = await fetch(`${base}/api/channel/verdict`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ sessionId: PSID, requestId: 'abcde', behavior: 'allow' }),
+  });
+  assert.equal(v.status, 200);
+  await waitFor((l) => l.type === 'permission' && l.request_id === 'abcde' && l.behavior === 'allow');
+  const st2 = await (await fetch(`${base}/api/state`)).json();
+  assert.equal(st2.sessions.find((x) => x.id === PSID).permissionRequests.length, 0);
+  assert.ok(st2.events.some((e) => e.__hook === 'PermissionVerdict' && e.payload.behavior === 'allow'));
+  sub.destroy();
+});
+
+test('permission relay: verdict is gated like the composer (proxied needs token; bad behavior 400)', async () => {
+  const denied = await fetch(`${base}/api/channel/verdict`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-forwarded-for': '100.64.0.9' },
+    body: JSON.stringify({ sessionId: SID, requestId: 'abcde', behavior: 'allow' }),
+  });
+  assert.equal(denied.status, 403);
+  const bad = await fetch(`${base}/api/channel/verdict`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ sessionId: SID, requestId: 'abcde', behavior: 'maybe' }),
+  });
+  assert.equal(bad.status, 400);
+});

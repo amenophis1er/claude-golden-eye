@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ArrowDownToLine, ArrowDownUp, Bot, CheckCircle2, Circle, CircleDot, Flag, GitFork,
-  ListTodo, MessageSquare, Play, Power, Send, ShieldX, TerminalSquare, TrendingUp, User,
+  ListTodo, MessageSquare, Play, Power, Send, ShieldCheck, ShieldQuestion, ShieldX,
+  TerminalSquare, TrendingUp, User,
 } from 'lucide-react';
-import type { HookEvent, SessionInfo, Todo } from '../lib/types';
+import type { HookEvent, PermissionRequest, SessionInfo, Todo } from '../lib/types';
 import EventDetail from './EventDetail';
 import Markdown from './Markdown';
 import { clock, fmtDur, toolSummary, parseTaskNotification } from '../lib/format';
@@ -74,6 +75,15 @@ function baseEntry(e: HookEvent, nameFor: (id: string) => string): Omit<Entry, '
       return { icon: MessageSquare, tone: 'text-amber-500', label: 'dashboard prompt', summary: String(p.prompt ?? '').slice(0, 200), raw: p, ts: e.__ts };
     case 'PMSync':
       return { icon: Flag, tone: 'text-amber-500', label: `PM mode ${p.action}`, summary: p.mission ?? '', raw: p, ts: e.__ts };
+    case 'PermissionRequest':
+      return { icon: ShieldQuestion, tone: 'text-amber-500', label: `approval wanted · ${p.tool_name}`, summary: p.description ?? '', raw: p, ts: e.__ts, emphasis: true };
+    case 'PermissionVerdict':
+      return {
+        icon: p.behavior === 'allow' ? ShieldCheck : ShieldX,
+        tone: p.behavior === 'allow' ? 'text-emerald-500' : 'text-red-500',
+        label: `${p.behavior === 'allow' ? 'approved' : 'denied'} from dashboard${p.tool_name ? ` · ${p.tool_name}` : ''}`,
+        summary: p.request_id ?? '', raw: p, ts: e.__ts,
+      };
     case 'Stop':
       return { icon: Flag, tone: 'text-indigo-400', label: 'turn ended', summary: String(p.last_assistant_message ?? '').slice(0, 200), raw: p, ts: e.__ts };
     case 'SessionEnd':
@@ -411,7 +421,70 @@ export default function LiveFeed({ session, events, now }: { session: SessionInf
       </div>
       <OutputPanel session={session} />
       </div>
+      {session.channelConnected && (session.permissionRequests?.length ?? 0) > 0 && (
+        <PermissionCards sessionId={session.id} requests={session.permissionRequests!} />
+      )}
       {session.channelConnected && <Composer sessionId={session.id} />}
+    </div>
+  );
+}
+
+// Relayed tool-approval prompts: answer here or in the terminal — whichever
+// lands first wins (Claude Code drops the loser's verdict by request id).
+function PermissionCards({ sessionId, requests }: { sessionId: string; requests: PermissionRequest[] }) {
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const answer = async (requestId: string, behavior: 'allow' | 'deny') => {
+    setBusyId(requestId);
+    try {
+      await fetch('/api/channel/verdict', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sessionId, requestId, behavior }),
+      });
+      // The SSE-driven refetch removes the card; no local state to clean.
+    } catch {
+      /* server unreachable — the terminal dialog is still open */
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <div className="shrink-0 border-t border-amber-300 bg-amber-50/70 px-4 py-2.5 dark:border-amber-800 dark:bg-amber-950/30">
+      {requests.map((r) => (
+        <div key={r.request_id} className="flex items-start gap-2.5 py-1">
+          <ShieldQuestion size={14} className="mt-0.5 shrink-0 text-amber-500" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs">
+              <span className="font-semibold">{r.tool_name}</span>
+              <span className="text-zinc-500"> — {r.description}</span>
+            </p>
+            {r.input_preview && (
+              <details className="mt-0.5">
+                <summary className="cursor-pointer text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">input</summary>
+                <pre className="mt-1 max-h-40 overflow-auto rounded bg-white/70 p-2 font-mono text-[10px] leading-relaxed whitespace-pre-wrap dark:bg-zinc-900/70">{r.input_preview}</pre>
+              </details>
+            )}
+          </div>
+          <div className="flex shrink-0 gap-1.5">
+            <button
+              onClick={() => answer(r.request_id, 'allow')}
+              disabled={busyId === r.request_id}
+              className="rounded-lg bg-emerald-600 px-3 py-1 text-[11px] font-medium text-white disabled:opacity-40"
+            >
+              allow
+            </button>
+            <button
+              onClick={() => answer(r.request_id, 'deny')}
+              disabled={busyId === r.request_id}
+              className="rounded-lg bg-red-600 px-3 py-1 text-[11px] font-medium text-white disabled:opacity-40"
+            >
+              deny
+            </button>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

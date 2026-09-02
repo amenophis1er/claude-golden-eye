@@ -196,6 +196,17 @@ function startChannelBridge() {
                   params: { content: m.text, meta: { sender: 'dashboard' } },
                 }) + '\n'
               );
+            } else if (m && m.type === 'permission' && m.request_id && (m.behavior === 'allow' || m.behavior === 'deny')) {
+              // Dashboard verdict → Claude Code. A stale/unknown request_id
+              // is dropped silently by Claude Code; the terminal dialog is
+              // never force-closed by us alone.
+              process.stdout.write(
+                JSON.stringify({
+                  jsonrpc: '2.0',
+                  method: 'notifications/claude/channel/permission',
+                  params: { request_id: String(m.request_id), behavior: m.behavior },
+                }) + '\n'
+              );
             }
           }
         });
@@ -230,7 +241,14 @@ async function handle(msg) {
         // the session. Harmless when the session was not started with the
         // channels flag — Claude Code then simply never registers the
         // listener and our notifications are dropped.
-        capabilities: { tools: {}, experimental: { 'claude/channel': {} } },
+        // 'claude/channel/permission' opts into permission relay: Claude Code
+        // forwards tool-approval prompts, the dashboard answers with
+        // allow/deny cards. Sender auth = the composer's gate (loopback
+        // Host-check, token for proxied access).
+        capabilities: {
+          tools: {},
+          experimental: { 'claude/channel': {}, 'claude/channel/permission': {} },
+        },
         serverInfo: { name: 'golden-eye', version: '0.1.0' },
         instructions:
           'golden-eye channel: events tagged <channel source="golden-eye" sender="dashboard"> are ' +
@@ -242,6 +260,24 @@ async function handle(msg) {
     case 'notifications/initialized':
       startChannelBridge();
       return;
+    case 'notifications/claude/channel/permission_request': {
+      // Claude Code relays an open tool-approval prompt. Forward it to the
+      // dashboard keyed by our claude pid; the verdict returns via the
+      // bridge stream. Fire-and-forget: relay failure just means the prompt
+      // is only answerable in the terminal (which stays open regardless).
+      if (params && params.request_id) {
+        await post('/api/channel/permission-request', {
+          pid: process.ppid,
+          request: {
+            request_id: String(params.request_id),
+            tool_name: String(params.tool_name || ''),
+            description: String(params.description || ''),
+            input_preview: String(params.input_preview || ''),
+          },
+        });
+      }
+      return;
+    }
     case 'ping':
       respond(id, {});
       return;
