@@ -79,7 +79,20 @@ const sseClients = new Set();
 // process pid it shares with the hooks); the composer routes a message to
 // exactly one session's bridge, which injects it as a Claude Code channel
 // event. See README "Dashboard composer".
-const COMPOSER_ENABLED = process.env.GOLDEN_EYE_COMPOSER === '1';
+// Enablement, in priority order: env override ('1'/'0') wins, else the
+// persistent opt-in in <data dir>/config.json ({"composer": true}) — that
+// file survives every spawn path (SessionStart bootstrap, launchd, manual),
+// unlike an env var that GUI-launched sessions would not inherit.
+function composerConfigured() {
+  if (process.env.GOLDEN_EYE_COMPOSER === '1') return true;
+  if (process.env.GOLDEN_EYE_COMPOSER === '0') return false;
+  try {
+    return JSON.parse(fs.readFileSync(path.join(config.DATA_DIR, 'config.json'), 'utf8')).composer === true;
+  } catch (_) {
+    return false; // no config file: composer stays off
+  }
+}
+const COMPOSER_ENABLED = composerConfigured();
 const channelSubs = new Map(); // claude pid (string) -> ndjson response stream
 
 let composerToken = null;

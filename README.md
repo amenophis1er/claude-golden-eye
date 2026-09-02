@@ -104,11 +104,20 @@ injected as channel events — visible in the terminal as a
 `← golden-eye: …` line, and acted on as a real turn. **Off by default**; two
 explicit opt-ins are required:
 
-1. Server side: start the golden-eye server with `GOLDEN_EYE_COMPOSER=1`
-   (otherwise every composer endpoint answers 404 and no bridge forms).
+1. Server side — either of (otherwise every composer endpoint answers 404 and
+   no bridge forms):
+   - persistent: `echo '{"composer": true}' > ~/.golden-eye/config.json`
+     (read at server start; works no matter what spawned the server), or
+   - per-run: `GOLDEN_EYE_COMPOSER=1` (env wins over the file; `0` force-disables).
 2. Session side: channels are a research preview, so each session must start
    with `claude --dangerously-load-development-channels plugin:golden-eye@claude-golden-eye`
-   (full-screen warning; that's Anthropic's gate, not ours).
+   (full-screen warning; that's Anthropic's gate, not ours). Make it a
+   dedicated alias so ordinary sessions stay flag-free:
+
+   ```bash
+   # ~/.zshrc — golden-eye session with the dashboard composer channel
+   alias claudege='claude --dangerously-load-development-channels plugin:golden-eye@claude-golden-eye'
+   ```
 
 The composer box appears in a session's Live-tab rail only when both are true
 (the session's channel bridge is connected). Sends are attributed in the feed

@@ -253,3 +253,25 @@ test('composer: fully disabled without the opt-in env (404 on both endpoints)', 
     off.kill('SIGTERM');
   }
 });
+
+test('composer: {"composer": true} in <data dir>/config.json enables it without env', async () => {
+  const dataDir = path.join(tmp, 'data-cfg');
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(path.join(dataDir, 'config.json'), '{"composer": true}\n');
+  const port = await freePort();
+  const cfg = spawn(process.execPath, [SERVER], {
+    env: { ...process.env, GOLDEN_EYE_DATA_DIR: dataDir, GOLDEN_EYE_PORT: String(port), GOLDEN_EYE_NOTIFY: '0', GOLDEN_EYE_COMPOSER: '' },
+    stdio: 'ignore',
+  });
+  try {
+    const b = `http://127.0.0.1:${port}`;
+    for (let i = 0; i < 50; i++) {
+      try { if ((await (await fetch(`${b}/healthz`)).json()).ok) break; } catch (_) {}
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    // Enabled: a bad pid is a 400 (validated), not the disabled 404.
+    assert.equal((await fetch(`${b}/api/channel/subscribe?pid=abc`)).status, 400);
+  } finally {
+    cfg.kill('SIGTERM');
+  }
+});
