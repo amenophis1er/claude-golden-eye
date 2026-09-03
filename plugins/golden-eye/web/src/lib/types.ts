@@ -113,6 +113,15 @@ export interface DashState {
   filesEnabled?: boolean;
   /** Version of the plugin code the running server was started from. */
   version?: string | null;
+  update?: {
+    running: string | null;
+    /** Newer version installed on disk while this process serves the old one. */
+    staleServer: string | null;
+    /** Newer release upstream (null unless the opt-in check is enabled). */
+    latestRelease: string | null;
+    command: string;
+    installKind: 'npx' | 'marketplace' | 'source';
+  };
 }
 
 export interface ArtifactInfo {

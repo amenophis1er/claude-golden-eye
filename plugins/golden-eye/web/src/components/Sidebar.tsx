@@ -247,6 +247,25 @@ export default function Sidebar({ state, connected, now, selectedId, tab, histor
           <History size={14} /> History
         </button>
       )}
+      {/* Update notice: quiet, dismissible-by-acting, never automatic. The
+          stale-server case needs no network and is the one that silently
+          makes a fix look deployed when it is not. */}
+      {(state?.update?.staleServer || state?.update?.latestRelease) && (
+        <div className="border-t border-amber-200 bg-amber-50 px-4 py-2 text-[11px] text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-300">
+          {state.update.staleServer ? (
+            <>
+              <span className="font-medium">v{state.update.staleServer} is installed</span> but this
+              server still runs v{state.update.running} — restart it to pick it up.
+            </>
+          ) : (
+            <>
+              <span className="font-medium">v{state.update.latestRelease} is available</span> (running
+              v{state.update.running})
+              <code className="mt-1 block font-mono break-all">{state.update.command}</code>
+            </>
+          )}
+        </div>
+      )}
       <div className="flex items-center gap-1.5 border-t border-zinc-200 px-4 py-2 text-[11px] text-zinc-400 dark:border-zinc-800">
         {state ? (
           <>

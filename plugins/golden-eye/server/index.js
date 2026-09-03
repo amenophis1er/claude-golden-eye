@@ -14,6 +14,7 @@ const Store = require('./state');
 const { tailTranscript, sessionStats, agentMeta, sessionReplay } = require('./transcript');
 const { listProjects, resolveProjectDir, listSessions, resolveTranscript, artifactsForProject } = require('./history');
 const { readProjectFile } = require('./projectfile');
+const { updateStatus } = require('./update');
 const { tasksForSession } = require('./tasks');
 const config = require('./config');
 
@@ -139,6 +140,17 @@ function filesConfigured() {
   return CONFIG_FILE.files === true;
 }
 const FILES_ENABLED = filesConfigured();
+
+// Update check: the only outbound request golden-eye ever makes, so it is
+// opt-in like the rest ({"updateCheck": true} / GOLDEN_EYE_UPDATE_CHECK).
+// The local "your server is behind what is installed" check needs no network
+// and runs regardless.
+function updateCheckConfigured() {
+  if (process.env.GOLDEN_EYE_UPDATE_CHECK === '1') return true;
+  if (process.env.GOLDEN_EYE_UPDATE_CHECK === '0') return false;
+  return CONFIG_FILE.updateCheck === true;
+}
+const UPDATE_CHECK_ENABLED = updateCheckConfigured();
 
 // Extra Host headers to accept beyond loopback (see hostAllowed). A reverse
 // proxy like `tailscale serve` forwards the original Host (e.g. the tailnet
@@ -402,6 +414,7 @@ const server = http.createServer(async (req, res) => {
       snapshot.historyEnabled = HISTORY_ENABLED;
       snapshot.filesEnabled = FILES_ENABLED;
       snapshot.version = config.VERSION;
+      snapshot.update = updateStatus(UPDATE_CHECK_ENABLED);
       return sendJson(res, 200, snapshot);
     }
 

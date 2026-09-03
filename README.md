@@ -268,9 +268,9 @@ delegation stats on the dashboard.
 
 ## Environment variables
 
-The three opt-in features (composer, history, files) can also be set
+The opt-in features (composer, history, files, updateCheck) can also be set
 persistently in `<data dir>/config.json` — `{"composer": true, "history": true,
-"files": true}` — which survives every spawn path (SessionStart bootstrap,
+"files": true, "updateCheck": true}` — which survives every spawn path (SessionStart bootstrap,
 launchd, manual). The env var wins when set: `1` forces on, `0` forces off even
 if config.json enables it. All are read once at server start, so changing either
 needs a server restart.
@@ -287,6 +287,7 @@ needs a server restart.
 | `GOLDEN_EYE_COMPOSER` | off | `1` = enable the dashboard composer (channel injection) |
 | `GOLDEN_EYE_HISTORY` | off | `1` = enable the read-only session history browser |
 | `GOLDEN_EYE_FILES` | off | `1` = enable the read-only project file viewer |
+| `GOLDEN_EYE_UPDATE_CHECK` | off | `1` = check GitHub daily for a newer release |
 | `GOLDEN_EYE_ALLOWED_HOSTS` | none | comma-separated extra `Host` values to accept (reverse proxies / tailnet name) |
 | `GOLDEN_EYE_DISABLE_POST` | unset | `1` = local logging only |
 
@@ -355,6 +356,17 @@ zero-dependency server — end users need no build step.
   A requested path is resolved against that session's own cwd and its realpath
   must stay inside it — traversal, absolute escapes and symlinks pointing out
   are rejected, binaries refused, reads capped at 512 kB.
+- **Update notice** — the sidebar reports the version the *running server* was
+  started from (also on `/healthz`), and warns when a newer version is installed
+  on disk while this process still serves the old code — the failure that makes
+  a fix look deployed when it is not. That check is local and always on.
+  Checking GitHub for a newer *release* is separate and **opt-in**
+  (`"updateCheck": true` / `GOLDEN_EYE_UPDATE_CHECK=1`): it is the only outbound
+  request golden-eye ever makes, at most once a day, cached, silent on failure,
+  and it never updates anything — it names the command that fits how this copy
+  was installed (npx / marketplace / checkout). GitHub rather than npm on
+  purpose: endpoint proxies that withhold recently-published versions rewrite
+  npm packuments, so an npm-based check would report "no update" indefinitely.
 - **Session history (opt-in)** — a read-only browser over every past session's
   transcript on disk: projects → sessions (first prompt, age, size) → transcript
   viewer, with a copyable `claude --resume <id>` command. Discovery is derived
