@@ -22,14 +22,25 @@ const { readStdinJson, resolveServerUrl } = require('./lib/logger');
 const GOLDEN_EYE_TOOL = /^mcp__.*golden[-_]?eye.*__/i;
 const WRITE_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 
-function isDirectorTool(payload) {
+// Two classes:
+//  'tool'    — a golden-eye MCP tool. Always auto-approved: these are the
+//              plugin's own instruments, only exist in golden-eye sessions,
+//              and the actuators (send_to_session/answer_permission) are
+//              already gated server-side by composer auth. Approving them
+//              unconditionally also breaks the director_attach chicken-and-egg
+//              (the call that MAKES a session a director can't require it to
+//              already be one) with no server round-trip.
+//  'mission' — a write to MISSION.md. Approved only for an attached director
+//              (server-confirmed), so a normal session can't get a free pass
+//              on a file that happens to be named MISSION.md.
+function classify(payload) {
   const tool = payload.tool_name || '';
-  if (GOLDEN_EYE_TOOL.test(tool)) return true;
+  if (GOLDEN_EYE_TOOL.test(tool)) return 'tool';
   if (WRITE_TOOLS.has(tool)) {
     const fp = (payload.tool_input && payload.tool_input.file_path) || '';
-    if (path.basename(String(fp)) === 'MISSION.md') return true;
+    if (path.basename(String(fp)) === 'MISSION.md') return 'mission';
   }
-  return false;
+  return null;
 }
 
 async function isDirectorSession(sessionId) {
@@ -51,11 +62,14 @@ async function isDirectorSession(sessionId) {
 async function main() {
   const payload = readStdinJson();
   try {
-    // Only spend a network call for tools we might auto-approve, and never
-    // for a subagent's call (agent_id present) — this is the director's own
-    // main-session autonomy, not its workers'.
-    if (!payload || payload.agent_id || !isDirectorTool(payload)) return;
-    if (!(await isDirectorSession(payload.session_id))) return;
+    // Never auto-approve a subagent's call (agent_id present) — this is the
+    // director's own main-session autonomy, not its workers'.
+    if (!payload || payload.agent_id) return;
+    const kind = classify(payload);
+    if (!kind) return;
+    // A MISSION.md write costs one server round-trip to confirm director
+    // status; golden-eye tools are approved outright (see classify).
+    if (kind === 'mission' && !(await isDirectorSession(payload.session_id))) return;
     process.stdout.write(
       JSON.stringify({
         hookSpecificOutput: {

@@ -16,8 +16,12 @@ strongest available model with extended thinking.
 1. **Mission**: take it from the arguments after `/director`. If absent or
    vague, ask the user until you can state the mission and its DONE criteria
    in two sentences.
-2. **Plan first — always.** Think hard, then write `MISSION.md` in the
-   current directory:
+2. **Attach FIRST**: call `director_attach` (watch all, or specific worker
+   ids once known). Do this before writing any files — attaching is what
+   makes your golden-eye tools and `MISSION.md` edits auto-approve, so the
+   rest of engage runs without permission prompts. (It also means you're
+   already listening if a worker connects while you plan.)
+3. **Plan.** Think hard, then write `MISSION.md` in the current directory:
 
    ```markdown
    # MISSION: <one line>
@@ -34,11 +38,11 @@ strongest available model with extended thinking.
    This file is the mission's source of truth — not your context window.
    Update it on EVERY wake: check items off with evidence, append to Log,
    record judgment calls under Decisions.
-3. **Survey**: call `list_sessions` (golden-eye MCP). Identify worker
+4. **Survey**: call `list_sessions` (golden-eye MCP). Identify worker
    session(s) for this mission — sessions with `channelConnected: true` can
    be steered. If none exists, tell the user exactly what to run
-   (`claude` with the golden-eye channels flag, in which directory) and wait.
-4. **Attach**: call `director_attach` (watch the chosen worker ids, or all).
+   (`claude` with the golden-eye channels flag, in which directory) and wait;
+   you will be woken automatically when one connects (worker-connected).
 5. **Brief the worker(s)** via `send_to_session`. Every briefing must
    include this worker protocol:
    - report milestones with `report_progress`; when you need a decision,
