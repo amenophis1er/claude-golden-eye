@@ -1,6 +1,6 @@
 {
   "name": "claude-golden-eye",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Live Claude Code session oversight + PM-mode discipline (hooks + MCP + dashboard)",
   "license": "MIT",
   "author": { "name": "Amen" },

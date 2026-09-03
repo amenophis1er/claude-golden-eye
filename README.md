@@ -46,7 +46,7 @@ opt in non-interactively). It targets the current `CLAUDE_CONFIG_DIR`
   | command | installs |
   | --- | --- |
   | `npx claude-golden-eye@latest init` | the latest **published release** (needs the npm registry) |
-  | `npx github:amenophis1er/claude-golden-eye#v0.1.3 init` | that exact **tag** — reproducible, no registry involved |
+  | `npx github:amenophis1er/claude-golden-eye#v0.1.4 init` | that exact **tag** — reproducible, no registry involved |
   | `npx github:amenophis1er/claude-golden-eye init` | the default branch's **HEAD**, which may be ahead of any release |
 
   A bare GitHub spec tracks `main`, not the newest tag, so pin the tag unless

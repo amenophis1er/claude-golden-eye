@@ -7,13 +7,13 @@
       "name": "golden-eye",
       "source": "./plugins/golden-eye",
       "description": "Live session oversight: passive hooks + local dashboard (agents, transcripts, plan, tokens). View-only, zero runtime dependencies.",
-      "version": "0.1.3"
+      "version": "0.1.4"
     },
     {
       "name": "golden-eye-pm",
       "source": "./plugins/golden-eye-pm",
       "description": "Optional PM-mode discipline: /pm makes the main session delegate-only (hook-enforced writes block + subagent model pinning). Best with the golden-eye observer installed.",
-      "version": "0.1.3"
+      "version": "0.1.4"
     }
   ]
 }
