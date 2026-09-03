@@ -34,7 +34,7 @@ const PAYLOAD = ['.claude-plugin', 'plugins', 'LICENSE', 'package.json'];
 const say = (msg) => process.stdout.write(msg + '\n');
 
 // ---------- flag parsing (exported for tests) ----------
-const BOOL_FLAGS = ['yes', 'pm', 'composer', 'history', 'launchd', 'purge', 'help', 'version'];
+const BOOL_FLAGS = ['yes', 'pm', 'composer', 'history', 'files', 'launchd', 'purge', 'help', 'version'];
 
 function parseCliArgs(argv) {
   const out = { command: null, flags: {}, errors: [] };
@@ -111,6 +111,7 @@ async function init(flags) {
     pm: flags.pm ?? false,
     composer: flags.composer ?? false,
     history: flags.history ?? false,
+    files: flags.files ?? false,
     launchd: flags.launchd ?? false,
   };
   if (interactive) {
@@ -122,6 +123,8 @@ async function init(flags) {
       choices.composer = await ask(rl, 'Composer — type into live sessions from the dashboard?', false);
     if (flags.history === undefined)
       choices.history = await ask(rl, 'History — read-only browser over past session transcripts?', false);
+    if (flags.files === undefined)
+      choices.files = await ask(rl, 'File viewer — open a project file referenced in a session (read-only)?', false);
     if (flags.launchd === undefined && process.platform === 'darwin')
       choices.launchd = await ask(rl, 'Always-on server — launchd service that survives reboots?', false);
     rl.close();
@@ -153,11 +156,12 @@ async function init(flags) {
   }
 
   // 4. Server-side opt-ins (merge — never clobber unrelated keys).
-  if (choices.composer || choices.history) {
+  if (choices.composer || choices.history || choices.files) {
     const file = path.join(DATA_DIR, 'config.json');
     const cfg = readJson(file) || {};
     if (choices.composer) cfg.composer = true;
     if (choices.history) cfg.history = true;
+    if (choices.files) cfg.files = true;
     fs.writeFileSync(file, JSON.stringify(cfg) + '\n');
     say(`opt-ins written to ${file}`);
   }
@@ -216,7 +220,8 @@ const USAGE = `claude-golden-eye ${PKG.version}
   npx claude-golden-eye init         install (interactive; --yes for defaults)
   npx claude-golden-eye uninstall    remove (--purge also deletes ${DATA_DIR})
 
-init flags: --yes  --[no-]pm  --[no-]composer  --[no-]history  --[no-]launchd
+init flags: --yes  --[no-]pm  --[no-]composer  --[no-]history  --[no-]files
+            --[no-]launchd
 Target instance: the current CLAUDE_CONFIG_DIR (default ~/.claude).`;
 
 async function main() {

@@ -106,7 +106,7 @@ function AgentDetail({ a, now, sessionId }: { a: AgentInfo; now: number; session
           <details className="mt-2" open={!a.mainAgent && a.status === 'done'}>
             <summary className="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">final report</summary>
             <div className="mt-1.5 max-h-72 overflow-y-auto rounded-md bg-zinc-100 p-2.5 dark:bg-zinc-900">
-              <Markdown text={a.lastMessage} />
+              <Markdown text={a.lastMessage} sessionId={sessionId} />
             </div>
           </details>
         )}

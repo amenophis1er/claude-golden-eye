@@ -1,6 +1,7 @@
 import { Brain, MessageSquare, TerminalSquare, CornerDownRight, User } from 'lucide-react';
 import { clock } from '../lib/format';
 import Markdown from './Markdown';
+import { useOpenFile } from './FileViewer';
 
 export interface TEntry {
   ts: string | null;
@@ -17,9 +18,10 @@ export interface TEntry {
  * Keys are the original entry index, so newest-first inserts don't remount
  * (and re-parse) every row on each poll.
  */
-export default function TranscriptEntryList({ entries, newestFirst }: {
-  entries: TEntry[]; newestFirst: boolean;
+export default function TranscriptEntryList({ entries, newestFirst, sessionId }: {
+  entries: TEntry[]; newestFirst: boolean; sessionId?: string | null;
 }) {
+  const openFile = useOpenFile();
   const indexed = entries.map((en, idx) => ({ en, idx }));
   const shown = newestFirst ? [...indexed].reverse() : indexed;
   return (
@@ -47,17 +49,30 @@ export default function TranscriptEntryList({ entries, newestFirst }: {
           return (
             <div key={i} className="my-2 flex gap-1.5 rounded-md bg-sky-50/60 px-1.5 py-1.5 dark:bg-sky-950/20">
               <MessageSquare size={11} className="mt-1 shrink-0 text-sky-500" />
-              <Markdown text={en.text ?? ''} className="min-w-0 flex-1" />
+              <Markdown text={en.text ?? ''} className="min-w-0 flex-1" sessionId={sessionId} />
               {en.ts && <span className="shrink-0 text-[10px] text-zinc-400 tabular-nums">{clock(en.ts)}</span>}
             </div>
           );
         if (en.kind === 'tool') {
           const brief = en.input ? Object.values(en.input)[0] ?? '' : '';
+          // file_path is a path we KNOW (no guessing) — always openable.
+          const filePath = en.input?.file_path;
+          const canOpen = !!(openFile && sessionId && filePath);
           return (
             <div key={i} className="my-0.5 flex items-baseline gap-1.5 px-1.5">
               <TerminalSquare size={11} className="relative top-0.5 shrink-0 text-violet-500" />
               <span className="shrink-0 text-[11px] font-medium">{en.name}</span>
+              {canOpen ? (
+                <button
+                  onClick={() => openFile!(sessionId!, filePath!)}
+                  title={`open ${filePath}`}
+                  className="min-w-0 flex-1 truncate text-left font-mono text-[11px] text-zinc-500 hover:text-zinc-800 hover:underline dark:hover:text-zinc-200"
+                >
+                  {brief}
+                </button>
+              ) : (
               <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-zinc-500" title={brief}>{brief}</span>
+              )}
               {en.ts && <span className="shrink-0 text-[10px] text-zinc-400 tabular-nums">{clock(en.ts)}</span>}
             </div>
           );

@@ -257,7 +257,7 @@ function OutputPanel({ session }: { session: SessionInfo }) {
         <h3 className="mb-1.5 text-[11px] font-semibold tracking-wider text-zinc-400 uppercase">Latest output (main)</h3>
         {session.lastResult ? (
           <div className="flex-1 overflow-y-auto rounded-lg bg-zinc-100 p-3 dark:bg-zinc-900">
-            <Markdown text={session.lastResult} />
+            <Markdown text={session.lastResult} sessionId={session.id} />
           </div>
         ) : (
           <p className="text-xs text-zinc-400">No turn result yet.</p>

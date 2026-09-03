@@ -1,4 +1,4 @@
-import { Activity, Bot, Crown, GitBranch, GitFork, Radio, ScrollText, Target } from 'lucide-react';
+import { Activity, Bot, Crown, ExternalLink, GitBranch, GitFork, Radio, ScrollText, Target } from 'lucide-react';
 import type { HookEvent, SessionInfo } from '../lib/types';
 import { navigate, type Tab } from '../lib/router';
 import { baseName, fmtTokens, relTime, shortId } from '../lib/format';
@@ -164,10 +164,26 @@ export default function SessionView({ session: s, events, tab, sub, now }: {
           </div>
         )}
 
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <StatChip label="delegations" value={s.stats.spawns} />
           <StatChip label="tool calls" value={s.stats.toolCalls} />
           <StatChip label="writes blocked" value={s.stats.denies} alert />
+          {/* Artifacts this session published — the page itself is one click
+              away, so link each rather than just counting them. */}
+          {s.artifacts?.map((a) => (
+            <a
+              key={a.id}
+              href={a.url}
+              target="_blank"
+              rel="noreferrer"
+              title={`${a.title ?? 'artifact'}${a.publishes > 1 ? ` · ${a.publishes} publishes` : ''}\n${a.url}`}
+              className="inline-flex max-w-[16rem] items-center gap-1.5 rounded-full border border-zinc-200 px-2.5 py-0.5 text-xs text-zinc-500 hover:border-amber-300 hover:text-zinc-800 dark:border-zinc-800 dark:text-zinc-400 dark:hover:border-amber-400/40 dark:hover:text-zinc-100"
+            >
+              <span aria-hidden>{a.favicon || '📄'}</span>
+              <span className="min-w-0 truncate">{a.title ?? 'artifact'}</span>
+              <ExternalLink size={10} className="shrink-0" />
+            </a>
+          ))}
         </div>
 
         <nav className="mt-3 flex gap-1">

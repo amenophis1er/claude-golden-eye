@@ -5,6 +5,8 @@ import { navigate, useRoute } from './lib/router';
 import Sidebar from './components/Sidebar';
 import SessionView from './components/SessionView';
 import HistoryView from './components/HistoryView';
+import ArtifactsView from './components/ArtifactsView';
+import FileViewerProvider from './components/FileViewer';
 
 export default function App() {
   const { state, connected } = useDashboard();
@@ -16,16 +18,17 @@ export default function App() {
   }, []);
 
   const session = useMemo(() => {
-    if (!state || route.history) return null;
+    if (!state || route.history || route.artifacts) return null;
     return state.sessions.find((s) => s.id === route.sessionId) ?? state.sessions[0] ?? null;
-  }, [state, route.sessionId, route.history]);
+  }, [state, route.sessionId, route.history, route.artifacts]);
 
   // Keep the URL canonical once data arrives (deep-linkable tabs).
   useEffect(() => {
-    if (!route.history && session && route.sessionId !== session.id) navigate(session.id, route.tab, route.sub);
-  }, [session, route.sessionId, route.tab, route.history]);
+    if (!route.history && !route.artifacts && session && route.sessionId !== session.id) navigate(session.id, route.tab, route.sub);
+  }, [session, route.sessionId, route.tab, route.history, route.artifacts]);
 
   return (
+    <FileViewerProvider enabled={!!state?.filesEnabled}>
     <div className="flex h-screen bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
       <Sidebar
         state={state}
@@ -34,9 +37,12 @@ export default function App() {
         selectedId={session?.id ?? null}
         tab={route.tab}
         historyActive={!!route.history}
+        artifactsActive={route.artifacts}
       />
       <main className="flex min-w-0 flex-1 flex-col">
-        {route.history ? (
+        {route.artifacts ? (
+          <ArtifactsView now={now} />
+        ) : route.history ? (
           <HistoryView dir={route.history.dir} id={route.history.id} now={now} />
         ) : session ? (
           <SessionView session={session} events={state?.events ?? []} tab={route.tab} sub={route.sub} now={now} />
@@ -48,5 +54,6 @@ export default function App() {
         )}
       </main>
     </div>
+    </FileViewerProvider>
   );
 }
