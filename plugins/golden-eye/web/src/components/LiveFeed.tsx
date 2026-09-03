@@ -8,6 +8,7 @@ import type { HookEvent, PermissionRequest, SessionInfo, Todo } from '../lib/typ
 import EventDetail from './EventDetail';
 import Markdown from './Markdown';
 import { clock, fmtDur, toolSummary, parseTaskNotification } from '../lib/format';
+import { isLiveAgent } from '../lib/agents';
 
 interface Entry {
   icon: any;
@@ -123,12 +124,7 @@ function baseEntry(e: HookEvent, nameFor: (id: string) => string): Omit<Entry, '
 function NowStrip({ session, now }: { session: SessionInfo; now: number }) {
   // "Now" means now: hide entries whose last tool activity is stale (a
   // session killed mid-turn would otherwise show absurd elapsed times).
-  const running = session.agents.filter(
-    (a) =>
-      (a.status === 'running' || a.status === 'starting') &&
-      a.lastToolAt != null &&
-      now - Date.parse(a.lastToolAt) < 10 * 60 * 1000
-  );
+  const running = session.agents.filter((a) => isLiveAgent(a, now));
   if (!running.length) return null;
   return (
     <div className="flex flex-wrap gap-2 border-b border-zinc-200 bg-white px-4 py-2.5 dark:border-zinc-800 dark:bg-zinc-900/40">

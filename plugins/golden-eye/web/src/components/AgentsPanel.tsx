@@ -3,16 +3,34 @@ import { Bot, CheckCircle2, ChevronDown, User } from 'lucide-react';
 import type { AgentInfo, SessionInfo } from '../lib/types';
 import { fmtDur, relTime, shortId } from '../lib/format';
 import { navigate } from '../lib/router';
+import { isStalled, neverStarted, isLiveAgent } from '../lib/agents';
 import AgentTranscript from './AgentTranscript';
 import Markdown from './Markdown';
 
-function StatusPill({ status }: { status: AgentInfo['status'] }) {
+function StatusPill({ status, stalled }: { status: AgentInfo['status']; stalled?: boolean }) {
   const map: Record<string, string> = {
     running: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
     starting: 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300',
     done: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400',
+    stalled: 'bg-amber-100 text-amber-700 dark:bg-amber-400/10 dark:text-amber-300',
   };
-  return <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${map[status] ?? map.done}`}>{status}</span>;
+  const label = stalled ? 'stalled' : status;
+  return <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${map[label] ?? map.done}`}>{label}</span>;
+}
+
+/**
+ * Claude Code's terminal identifies a delegate by its agent TYPE ("Explore");
+ * the spawn only carries a description ("Map identity ladder code paths").
+ * Showing description alone made one agent look like two different ones
+ * across the two views, so the type rides along wherever a delegate is named.
+ */
+function TypeBadge({ type }: { type: string | null }) {
+  if (!type) return null;
+  return (
+    <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-px font-mono text-[10px] font-normal text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+      {type}
+    </span>
+  );
 }
 
 function tabLabel(a: AgentInfo) {
@@ -22,7 +40,8 @@ function tabLabel(a: AgentInfo) {
 }
 
 function AgentDetail({ a, now, sessionId }: { a: AgentInfo; now: number; sessionId: string }) {
-  const running = a.status === 'running' || a.status === 'starting';
+  const stalled = isStalled(a, now);
+  const running = (a.status === 'running' || a.status === 'starting') && !stalled;
   const topTools = Object.entries(a.tools).sort((x, y) => y[1] - x[1]);
   const elapsed = running && a.startedAt ? fmtDur(now - Date.parse(a.startedAt)) : null;
   const meta: [string, string][] = [];
@@ -70,11 +89,12 @@ function AgentDetail({ a, now, sessionId }: { a: AgentInfo; now: number; session
       <div className="max-h-[45vh] shrink-0 overflow-y-auto pr-1 lg:max-h-none lg:w-[var(--agent-left-w)]">
         <div className="flex items-center gap-2.5">
           {a.mainAgent ? <User size={16} className="shrink-0 text-zinc-400" /> : <Bot size={16} className="shrink-0 text-violet-400" />}
+          {!a.mainAgent && <TypeBadge type={a.type} />}
           <span className="min-w-0 flex-1 text-sm font-semibold">
             {a.mainAgent ? 'Main session' : (a.description ?? a.type ?? 'delegate')}
           </span>
           {elapsed && <span className="shrink-0 text-xs text-zinc-400 tabular-nums">⏱ {elapsed}</span>}
-          <StatusPill status={a.status} />
+          <StatusPill status={a.status} stalled={stalled} />
         </div>
         <dl className="mt-3 space-y-1 border-y border-zinc-200 py-3 dark:border-zinc-800">
           {meta.map(([k, v]) => (
@@ -123,7 +143,15 @@ function AgentDetail({ a, now, sessionId }: { a: AgentInfo; now: number; session
           {running && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 pulse-dot" />}
           {running ? 'live transcript' : 'transcript'}
         </div>
-        <AgentTranscript sessionId={sessionId} agentId={a.mainAgent ? null : a.id} running={running} fill />
+        {neverStarted(a) ? (
+          <p className="mt-1.5 text-[11px] text-zinc-400">
+            No agent ever reported for this delegation — it was spawned{' '}
+            {a.startedAt ? relTime(a.startedAt, now) : ''} but never started, so there is no
+            transcript. Check the session feed for a failed or rejected spawn.
+          </p>
+        ) : (
+          <AgentTranscript sessionId={sessionId} agentId={a.mainAgent ? null : a.id} running={running} fill />
+        )}
       </div>
     </div>
   );
@@ -131,7 +159,7 @@ function AgentDetail({ a, now, sessionId }: { a: AgentInfo; now: number; session
 
 export default function AgentsPanel({ session, now, sub }: { session: SessionInfo; now: number; sub: string | null }) {
   const main = session.agents.find((a) => a.mainAgent);
-  const isLive = (a: AgentInfo) => a.status === 'running' || a.status === 'starting';
+  const isLive = (a: AgentInfo) => isLiveAgent(a, now);
   const sortTs = (a: AgentInfo) => Date.parse((isLive(a) ? a.startedAt : a.endedAt || a.startedAt) || '') || 0;
   const delegates = session.agents
     .filter((a) => !a.mainAgent)
@@ -170,8 +198,18 @@ export default function AgentsPanel({ session, now, sub }: { session: SessionInf
             onClick={() => navigate(session.id, 'agents', a.mainAgent ? 'main' : a.id)}
             className={tabCls(selected === a)}
           >
-            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${isLive(a) ? 'bg-emerald-500 pulse-dot' : 'bg-zinc-300 dark:bg-zinc-600'}`} />
+            <span
+              title={isStalled(a, now) ? 'no activity for over 10 minutes' : undefined}
+              className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                isLive(a)
+                  ? 'bg-emerald-500 pulse-dot'
+                  : isStalled(a, now)
+                    ? 'bg-amber-400'
+                    : 'bg-zinc-300 dark:bg-zinc-600'
+              }`}
+            />
             {a.mainAgent ? <User size={12} /> : <Bot size={12} />}
+            {!a.mainAgent && <TypeBadge type={a.type} />}
             {tabLabel(a)}
           </button>
         ))}
