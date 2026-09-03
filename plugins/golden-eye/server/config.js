@@ -22,4 +22,21 @@ const LOCK_FILE = path.join(DATA_DIR, 'server.lock');
 
 const EVENTS_FILE = path.join(DATA_DIR, 'events.jsonl');
 
-module.exports = { DATA_DIR, PORT_CANDIDATES, SERVER_FILE, LOCK_FILE, EVENTS_FILE };
+// Build generation: the newest mtime across this copy's server sources.
+// /healthz reports it and boot.js compares — a healthy server built from
+// OLDER code than the bootstrapping copy gets restarted instead of adopted,
+// so plugin updates and branch switches take effect on the next
+// SessionStart instead of silently serving stale code. Semantics: the most
+// recently written/deployed copy wins.
+const fs = require('fs');
+let SERVER_GENERATION = 0;
+try {
+  for (const f of fs.readdirSync(__dirname)) {
+    if (!f.endsWith('.js')) continue;
+    const m = fs.statSync(path.join(__dirname, f)).mtimeMs;
+    if (m > SERVER_GENERATION) SERVER_GENERATION = m;
+  }
+} catch (_) {}
+SERVER_GENERATION = Math.round(SERVER_GENERATION);
+
+module.exports = { DATA_DIR, PORT_CANDIDATES, SERVER_FILE, LOCK_FILE, EVENTS_FILE, SERVER_GENERATION };

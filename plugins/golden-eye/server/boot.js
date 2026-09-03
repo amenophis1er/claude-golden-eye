@@ -26,14 +26,32 @@ async function healthz(port) {
     const r = await fetch(`http://127.0.0.1:${port}/healthz`, {
       signal: AbortSignal.timeout(400),
     });
-    if (!r.ok) return false;
+    if (!r.ok) return null;
     const j = await r.json();
     // Identity check: /healthz must self-identify, else a port squatter that
     // happens to answer { ok: true } would be adopted as "the" server.
-    return !!(j && j.ok === true && j.name === 'golden-eye');
+    return j && j.ok === true && j.name === 'golden-eye' ? j : null;
   } catch (_) {
-    return false;
+    return null;
   }
+}
+
+// Adopt a healthy server only if it runs code at least as new as ours.
+// A stale one (older gen, or a pre-gen build reporting none) is killed so
+// the spawn path below replaces it — this is how plugin updates propagate
+// without anyone remembering to restart the singleton.
+function adoptable(h) {
+  return !!h && (h.gen || 0) >= config.SERVER_GENERATION;
+}
+
+async function retireStale(h, port, fallbackPid) {
+  const pid = (h && h.pid) || fallbackPid;
+  say(`server on :${port} runs older code (gen ${h && h.gen ? h.gen : 'none'} < ${config.SERVER_GENERATION}) — restarting it`);
+  try {
+    if (pid) process.kill(pid);
+  } catch (_) {}
+  // Give the port a moment to free up before the spawn path probes it.
+  await new Promise((r) => setTimeout(r, 300));
 }
 
 // A bootstrap normally removes its lock in `finally`, but a SIGKILL (or
@@ -117,20 +135,27 @@ async function main() {
   // 1. Fast path: server.json says a server lives here and it is healthy.
   try {
     const meta = JSON.parse(fs.readFileSync(config.SERVER_FILE, 'utf8'));
-    if (meta && meta.pid && pidAlive(meta.pid) && (await healthz(meta.port))) {
-      say(`server already running on :${meta.port} (pid ${meta.pid})`);
-      return;
+    if (meta && meta.pid && pidAlive(meta.pid)) {
+      const h = await healthz(meta.port);
+      if (adoptable(h)) {
+        say(`server already running on :${meta.port} (pid ${meta.pid})`);
+        return;
+      }
+      if (h) await retireStale(h, meta.port, meta.pid);
     }
   } catch (_) {
     /* no/stale server file — fall through to discovery */
   }
 
-  // 2. Discovery: healthy golden-eye on any candidate port -> reuse as-is.
+  // 2. Discovery: healthy same-or-newer golden-eye on any candidate port ->
+  //    reuse; a stale one is retired so the spawn path replaces it.
   for (const port of config.PORT_CANDIDATES) {
-    if (await healthz(port)) {
+    const h = await healthz(port);
+    if (adoptable(h)) {
       say(`found healthy server on :${port} (its server.json is stale, but it works)`);
       return;
     }
+    if (h) await retireStale(h, port, null);
   }
 
   // 3. Exclusive lock so simultaneous SessionStarts spawn exactly one server.

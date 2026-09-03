@@ -639,7 +639,14 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && url.pathname === '/healthz') {
-      return sendJson(res, 200, { ok: true, name: 'golden-eye', sessions: store.sessions.size, clients: sseClients.size });
+      return sendJson(res, 200, {
+        ok: true,
+        name: 'golden-eye',
+        gen: config.SERVER_GENERATION,
+        pid: process.pid,
+        sessions: store.sessions.size,
+        clients: sseClients.size,
+      });
     }
 
     if (req.method === 'GET' && serveStatic(res, url.pathname)) return;

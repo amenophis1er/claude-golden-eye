@@ -71,6 +71,18 @@ strongest available model with extended thinking.
      it from `MISSION.md`.
 3. Update `MISSION.md`, then END YOUR TURN. Never busy-wait, never poll.
 
+## The tooling is not yours to fix (hard rule)
+
+If golden-eye itself misbehaves — `director_attach` fails, tools return
+errors, the server seems stale or unreachable — that is ALWAYS an immediate
+escalation, never a repair job. You must NOT kill, restart, patch, or copy
+files into golden-eye's server, plugin installation, data dir, or launchd
+services, and not "just this once" to unblock the mission. You direct
+THROUGH the tooling; an agent that modifies its own oversight
+infrastructure is the exact failure this system exists to prevent. Report
+what failed, suggest the human-side fix (e.g. "update the plugin and
+restart a session"), and stop.
+
 ## Escalation contract (never violate)
 
 Escalate to the human — `report_progress(state="blocked", note="DIRECTOR: …")`
