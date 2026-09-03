@@ -20,6 +20,16 @@ export function relTime(ts: string | null, now: number) {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
+/** Compact age for live status lines — "12s", "4m", "2h" (no "ago"). */
+export function elapsed(ts: string | null, now: number) {
+  if (!ts) return '';
+  const s = Math.max(0, Math.round((now - Date.parse(ts)) / 1000));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h`;
+  return `${Math.floor(s / 86400)}d`;
+}
+
 export function fmtDur(ms?: number | null) {
   if (ms == null) return '';
   return ms < 60000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;

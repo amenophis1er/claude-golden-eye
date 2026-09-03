@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
-import { Eye, Crown, GitFork, History, X, Trash2 } from 'lucide-react';
+import { Eye, Crown, GitFork, History, LayoutTemplate, X, Trash2 } from 'lucide-react';
 import type { DashState, SessionInfo } from '../lib/types';
 import { pruneSessions } from '../lib/useDashboard';
-import { navigate, navigateHistory, type Tab } from '../lib/router';
-import { baseName, relTime, shortId } from '../lib/format';
+import { navigate, navigateArtifacts, navigateHistory, type Tab } from '../lib/router';
+import { baseName, elapsed, relTime, shortId } from '../lib/format';
 import ThemeToggle from './ThemeToggle';
 
 const STALE_MS = 2 * 60 * 60 * 1000;
@@ -25,21 +25,87 @@ function groupOf(s: SessionInfo, now: number): 'active' | 'idle' | 'stale' {
   return 'idle';
 }
 
-function Dot({ group }: { group: string }) {
+/**
+ * What this session is doing right now, for the scan-many-sessions case:
+ * the point of the sidebar is spotting who is blocked on YOU versus who is
+ * busy, so the states that need a human sort to the top and are the only
+ * ones that get colour.
+ */
+type StatusKind = 'attention' | 'working' | 'waiting' | 'done';
+
+function statusOf(s: SessionInfo, group: 'active' | 'idle' | 'stale', now: number) {
+  const running = s.agents.filter((a) => !a.mainAgent && (a.status === 'running' || a.status === 'starting')).length;
+  const agentsText = `${running} agent${running > 1 ? 's' : ''}`;
+  const attention = 'text-amber-600 dark:text-amber-400';
+
+  if (s.openQuestion) return { kind: 'attention' as StatusKind, text: 'question for you', tone: attention };
+  if (s.permissionRequests?.length) {
+    const first = s.permissionRequests[0];
+    const extra = s.permissionRequests.length > 1 ? ` +${s.permissionRequests.length - 1}` : '';
+    return { kind: 'attention' as StatusKind, text: `approve ${first.tool_name}${extra}`, tone: attention };
+  }
+  if (group === 'active') {
+    const main = s.agents.find((a) => a.mainAgent);
+    const bits = [running ? agentsText : null, main?.lastTool ?? null].filter(Boolean);
+    return {
+      kind: 'working' as StatusKind,
+      text: bits.join(' · ') || 'working',
+      time: elapsed(main?.lastToolAt ?? s.lastActivity, now),
+      tone: 'text-zinc-500',
+    };
+  }
+  // A finished main turn with delegations still in flight is not the user's
+  // move yet — same distinction the idle notification draws, so it keeps the
+  // working indicator rather than claiming the turn.
+  if (group === 'idle' && running) {
+    return {
+      kind: 'working' as StatusKind,
+      text: `${agentsText} running`,
+      time: elapsed(s.lastActivity, now),
+      tone: 'text-zinc-500',
+    };
+  }
+  if (group === 'idle') {
+    return {
+      kind: 'waiting' as StatusKind,
+      text: 'your turn',
+      time: elapsed(s.lastActivity, now),
+      tone: 'text-sky-600 dark:text-sky-400',
+    };
+  }
+  return {
+    kind: 'done' as StatusKind,
+    text: s.state === 'ended' ? 'ended' : 'stale',
+    time: elapsed(s.lastActivity, now),
+    tone: 'text-zinc-400 dark:text-zinc-500',
+  };
+}
+
+/**
+ * One indicator per row, driven by the status rather than the group: a
+ * spinning ring means work is happening, a pulsing amber dot means a human is
+ * needed, a solid blue dot means the turn is yours, faint grey means finished.
+ * Two different motions so "busy" is never mistaken for "needs you".
+ */
+function Indicator({ kind }: { kind: StatusKind }) {
+  if (kind === 'working')
+    return <span className="spin-ring h-2.5 w-2.5 shrink-0 text-emerald-500" aria-label="working" />;
   const cls =
-    group === 'active'
-      ? 'bg-emerald-500 pulse-dot'
-      : group === 'idle'
-        ? 'bg-zinc-400'
+    kind === 'attention'
+      ? 'bg-amber-500 pulse-dot'
+      : kind === 'waiting'
+        ? 'bg-sky-500'
         : 'bg-zinc-300 dark:bg-zinc-700';
-  return <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${cls}`} />;
+  return <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${cls}`} aria-label={kind} />;
 }
 
 function Row({ s, group, now, selected, tab }: {
   s: SessionInfo; group: 'active' | 'idle' | 'stale'; now: number; selected: boolean; tab: Tab;
 }) {
+  const status = statusOf(s, group, now);
   return (
     <div
+      title={`${shortId(s.id)} · last activity ${relTime(s.lastActivity, now)}`}
       className={`group flex cursor-pointer items-center gap-2.5 rounded-lg py-1.5 pr-2 pl-3 text-sm transition-colors ${
         selected
           ? 'bg-amber-100/70 text-amber-950 dark:bg-amber-400/10 dark:text-amber-100'
@@ -47,7 +113,7 @@ function Row({ s, group, now, selected, tab }: {
       } ${group === 'stale' ? 'opacity-60' : ''}`}
       onClick={() => navigate(s.id, tab)}
     >
-      <Dot group={group} />
+      <Indicator kind={status.kind} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5 truncate text-[13px]">
           <span className="min-w-0 truncate">
@@ -60,8 +126,9 @@ function Row({ s, group, now, selected, tab }: {
             </span>
           )}
         </div>
-        <div className="truncate text-xs text-zinc-500">
-          {shortId(s.id)} · {relTime(s.lastActivity, now)}
+        <div className={`flex items-center gap-1.5 truncate text-xs ${status.tone}`}>
+          <span className="min-w-0 truncate">{status.text}</span>
+          {status.time && <span className="shrink-0 text-zinc-400 tabular-nums">{status.time}</span>}
         </div>
       </div>
       {/* Stale rows are removable; so are non-active forks — a fork never
@@ -82,9 +149,9 @@ function Row({ s, group, now, selected, tab }: {
 
 const GROUP_ORDER = { active: 0, idle: 1, stale: 2 } as const;
 
-export default function Sidebar({ state, connected, now, selectedId, tab, historyActive }: {
+export default function Sidebar({ state, connected, now, selectedId, tab, historyActive, artifactsActive }: {
   state: DashState | null; connected: boolean; now: number; selectedId: string | null; tab: Tab;
-  historyActive: boolean;
+  historyActive: boolean; artifactsActive: boolean;
 }) {
   // One block per project (cwd), newest activity first; sessions within a
   // project ordered active → idle → stale so repeat sessions of the same
@@ -145,7 +212,7 @@ export default function Sidebar({ state, connected, now, selectedId, tab, histor
               <span className="shrink-0 text-[10px] text-zinc-400 tabular-nums">{rows.length}</span>
             </div>
             {rows.map(({ s, group }) => (
-              <Row key={s.id} s={s} group={group} now={now} selected={!historyActive && s.id === selectedId} tab={tab} />
+              <Row key={s.id} s={s} group={group} now={now} selected={!historyActive && !artifactsActive && s.id === selectedId} tab={tab} />
             ))}
           </div>
         ))}
@@ -153,6 +220,16 @@ export default function Sidebar({ state, connected, now, selectedId, tab, histor
           <p className="px-3 py-6 text-center text-xs text-zinc-400">Waiting for sessions…</p>
         )}
       </div>
+      <button
+        onClick={() => navigateArtifacts()}
+        className={`flex items-center gap-2 border-t border-zinc-200 px-4 py-2.5 text-sm transition-colors dark:border-zinc-800 ${
+          artifactsActive
+            ? 'bg-amber-100/70 font-medium text-amber-950 dark:bg-amber-400/10 dark:text-amber-100'
+            : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900'
+        }`}
+      >
+        <LayoutTemplate size={14} /> Artifacts
+      </button>
       {state?.historyEnabled && (
         <button
           onClick={() => navigateHistory()}

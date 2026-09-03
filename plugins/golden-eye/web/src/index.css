@@ -15,6 +15,26 @@
 }
 .pulse-dot { animation: pulse-dot 1.6s ease-in-out infinite; }
 
+/* Work in progress: a spinning ring, deliberately a different motion from
+   pulse-dot so "busy" never reads as "needs you". Border-based so it works
+   everywhere and inherits currentColor. */
+@keyframes spin-ring { to { transform: rotate(360deg); } }
+.spin-ring {
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 9999px;
+  animation: spin-ring 0.9s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .spin-ring { animation-duration: 3s; }
+  .pulse-dot { animation-duration: 3s; }
+}
+
+/* Inline code that may be a project file: hint it is clickable. Applied to
+   every inline span (we only know for sure on click), so keep it subtle. */
+.md-paths :not(pre) > code { cursor: pointer; }
+.md-paths :not(pre) > code:hover { text-decoration: underline; text-underline-offset: 2px; }
+
 * { scrollbar-width: thin; scrollbar-color: rgb(161 161 170 / 0.4) transparent; }
 
 /* ---- markdown renderer (.md) ---- */
