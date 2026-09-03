@@ -1,6 +1,6 @@
 ---
 name: pm
-description: Golden-eye PM mode — toggle project-manager discipline for this session. "/pm <mission>" engages (main session delegates everything, writes are hook-blocked; optional "--sub <model>" pins every subagent's model), "/pm off" disengages.
+description: Golden-eye PM mode — toggle project-manager discipline for this session. "/pm <mission>" engages (main session delegates everything, writes are hook-blocked; subagents are pinned to opus by default, "--sub <model>" chooses another and "--sub none" turns pinning off), "/pm off" disengages.
 ---
 [PM-MODE-COMMAND golden-eye]
 User arguments: "$ARGUMENTS"

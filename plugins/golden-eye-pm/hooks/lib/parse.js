@@ -10,7 +10,15 @@
  *   null                                        — not a /pm invocation
  *   { action: 'off' }                           — disengage
  *   { action: 'on', mission, subModel }         — engage (subModel may be null)
+ *
+ * Subagent model: PM mode exists to push implementation work onto delegates,
+ * so the delegates are where capability matters most — the default pin is
+ * therefore "opus" rather than "whatever the spawn happened to ask for".
+ * "--sub <model>" chooses another; "--sub none" (off/inherit/default) turns
+ * pinning off so subagents inherit as before.
  */
+const DEFAULT_SUB_MODEL = 'opus';
+const NO_PIN = new Set(['none', 'off', 'inherit', 'default', 'no']);
 
 // Path 1: expanded skill/command text carrying the marker; $ARGUMENTS appears
 // as `... arguments: "<args>"` (matched case-insensitively).
@@ -40,10 +48,14 @@ function parsePmPrompt(prompt) {
   // "on", "<mission>", "on — <mission>" all engage. Optional subagent model
   // pin: "--sub <model>" / "--sub-model=<model>" / "sub-model: <model>"
   // anywhere in the args.
-  let subModel = null;
+  let subModel = DEFAULT_SUB_MODEL;
   const argsSansSub = args.replace(
     /(?:--sub(?:-model)?[\s=:]+|sub[-_]?model\s*[:=]\s*)([\w.-]+)\s*/i,
-    (_, m) => { subModel = m.toLowerCase(); return ''; }
+    (_, m) => {
+      const v = m.toLowerCase();
+      subModel = NO_PIN.has(v) ? null : v;
+      return '';
+    }
   );
   const mission = argsSansSub
     .replace(/^on\b/i, '')
@@ -52,4 +64,4 @@ function parsePmPrompt(prompt) {
   return { action: 'on', mission, subModel };
 }
 
-module.exports = { parsePmPrompt };
+module.exports = { parsePmPrompt, DEFAULT_SUB_MODEL };

@@ -27,12 +27,12 @@ test('raw "/pm off" disengages — any case, trailing text ignored', () => {
 
 test('raw "/pm on <mission>" engages with the mission text', () => {
   const p = parsePmPrompt('/pm on MISSION: ship the payments refactor');
-  assert.deepEqual(p, { action: 'on', mission: 'MISSION: ship the payments refactor', subModel: null });
+  assert.deepEqual(p, { action: 'on', mission: 'MISSION: ship the payments refactor', subModel: 'opus' });
 });
 
 test('bare "/pm" and "/pm on" engage with an empty mission', () => {
-  assert.deepEqual(parsePmPrompt('/pm'), { action: 'on', mission: '', subModel: null });
-  assert.deepEqual(parsePmPrompt('/pm on'), { action: 'on', mission: '', subModel: null });
+  assert.deepEqual(parsePmPrompt('/pm'), { action: 'on', mission: '', subModel: 'opus' });
+  assert.deepEqual(parsePmPrompt('/pm on'), { action: 'on', mission: '', subModel: 'opus' });
 });
 
 test('mission separators after "on" are trimmed', () => {
@@ -81,7 +81,7 @@ test('regression: quotes later in the expanded skill body do not bleed into the 
   const expanded =
     '[PM-MODE-COMMAND golden-eye]\nUser arguments: "on build a parser"\n\n' +
     'You are the PM until the user says "/pm off". Follow the charter…';
-  assert.deepEqual(parsePmPrompt(expanded), { action: 'on', mission: 'build a parser', subModel: null });
+  assert.deepEqual(parsePmPrompt(expanded), { action: 'on', mission: 'build a parser', subModel: 'opus' });
 });
 
 test('quotes inside the args line itself survive', () => {
@@ -91,10 +91,31 @@ test('quotes inside the args line itself survive', () => {
 
 test('regression: "on" prefix strips case-insensitively', () => {
   assert.equal(parsePmPrompt('/pm ON ship it').mission, 'ship it');
-  assert.deepEqual(parsePmPrompt('/pm On'), { action: 'on', mission: '', subModel: null });
+  assert.deepEqual(parsePmPrompt('/pm On'), { action: 'on', mission: '', subModel: 'opus' });
 });
 
 test('marker present but arguments unparseable ⇒ engage with empty mission, never mis-parse', () => {
   const p = parsePmPrompt('[PM-MODE-COMMAND golden-eye] no args line at all');
-  assert.deepEqual(p, { action: 'on', mission: '', subModel: null });
+  assert.deepEqual(p, { action: 'on', mission: '', subModel: 'opus' });
+});
+
+test('subagent pin defaults to opus, and can be turned off explicitly', () => {
+  // PM mode delegates all implementation, so delegates default to the strong
+  // model rather than inheriting whatever the spawn asked for.
+  assert.equal(parsePmPrompt('/pm on MISSION: ship it').subModel, 'opus');
+  assert.equal(parsePmPrompt('/pm MISSION: ship it').subModel, 'opus');
+
+  // An explicit choice wins.
+  assert.equal(parsePmPrompt('/pm on --sub sonnet MISSION: ship it').subModel, 'sonnet');
+  assert.equal(parsePmPrompt('/pm on --sub haiku m').subModel, 'haiku');
+
+  // …including the choice to not pin at all, restoring inheritance.
+  for (const off of ['none', 'off', 'inherit', 'default', 'NONE']) {
+    const p = parsePmPrompt(`/pm on --sub ${off} MISSION: ship it`);
+    assert.equal(p.subModel, null, off);
+    assert.equal(p.mission, 'MISSION: ship it', off);
+  }
+
+  // "off" as the action still disengages — not a pin value.
+  assert.deepEqual(parsePmPrompt('/pm off'), { action: 'off' });
 });
