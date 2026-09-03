@@ -141,7 +141,7 @@ const channelSubs = new Map(); // claude pid (string) -> ndjson response stream
 // decision-worthy worker events into that session over its channel bridge.
 // The director is an ordinary Claude Code session running the /director
 // skill — all intelligence lives there; the server only routes.
-const DIRECTOR_WAKE_KINDS = new Set(['stop', 'blocked', 'question', 'permission', 'session-end']);
+const DIRECTOR_WAKE_KINDS = new Set(['stop', 'blocked', 'question', 'permission', 'session-end', 'worker-connected']);
 const directors = new Map(); // claude pid (string) -> { sessionId, watch: 'all'|Set<sid>, wake: Set<kind> }
 
 function directorFor(pid) {
@@ -176,6 +176,40 @@ function directorDigest(kind, ev, sess) {
       return `[worker ${who}] opened a terminal question dialog (NOT remotely answerable): ${snip(q && q.question)}`;
     }
     default: return `[worker ${who}] ${ev.__hook}`;
+  }
+}
+
+// A worker's channel bridge just came up — wake any director watching it, so
+// "I'll wake the moment a worker connects" is true without a manual nudge.
+// Not a stored hook event (it's a bridge lifecycle moment), so it routes
+// directly rather than through wakeKindOf.
+function notifyWorkerConnected(pid) {
+  if (!directors.size) return;
+  const pidStr = String(pid);
+  let sid = null;
+  let cwd = null;
+  for (const s of store.sessions.values()) {
+    if (String(s.claudePid) === pidStr) { sid = s.id; cwd = s.cwd; break; }
+  }
+  for (const [dpid, d] of directors) {
+    if (dpid === pidStr) continue; // the director's own bridge, never itself
+    if (d.sessionId && d.sessionId === sid) continue;
+    if (d.watch !== 'all' && (!sid || !d.watch.has(sid))) continue;
+    if (!d.wake.has('worker-connected')) continue;
+    const sub = channelSubs.get(dpid);
+    if (!sub) continue;
+    const who = sid ? `${sid.slice(0, 8)}${cwd ? ` (${path.basename(cwd)})` : ''}` : `pid ${pidStr}`;
+    try {
+      sub.write(
+        JSON.stringify({
+          type: 'message',
+          text: `[worker ${who}] a session just connected and is now steerable — call list_sessions and brief it if it belongs to your mission.`,
+          meta: { sender: 'golden_eye_events', kind: 'worker-connected', session_id: sid || '' },
+        }) + '\n'
+      );
+    } catch (_) {
+      channelSubs.delete(dpid);
+    }
   }
 }
 
@@ -552,6 +586,10 @@ const server = http.createServer(async (req, res) => {
       res.write('{"type":"hello"}\n');
       channelSubs.set(pid, res);
       req.on('close', () => { if (channelSubs.get(pid) === res) channelSubs.delete(pid); });
+      // Wake any watching director now that this worker is steerable. Deferred
+      // a tick so a racing SessionStart can register the pid->session mapping
+      // first (best-effort; the digest falls back to the pid otherwise).
+      setTimeout(() => notifyWorkerConnected(pid), 150).unref();
       return;
     }
 

@@ -531,3 +531,44 @@ test('director status endpoint: true only for an attached director session', asy
   r = await (await fetch(`${base}/api/director/status?sessionId=${DSID}`)).json();
   assert.equal(r.isDirector, false);
 });
+
+test('director: a newly connecting worker wakes the director (wake-on-connect)', async () => {
+  const http = require('http');
+  const DPID = '70001';
+  const DSID = 'woc-director';
+  const WPID = '70002';
+  const WSID = 'woc-worker';
+
+  // Director session + its bridge, then attach.
+  await fetch(`${base}/ingest`, { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ __hook: 'SessionStart', __pid: Number(DPID), payload: { session_id: DSID, cwd: '/tmp/woc-dir' } }) });
+  const lines = [];
+  let onLine = null;
+  const dsub = http.get(`${base}/api/channel/subscribe?pid=${DPID}`, (res) => {
+    let buf = '';
+    res.setEncoding('utf8');
+    res.on('data', (c) => { buf += c; let i; while ((i = buf.indexOf('\n')) !== -1) { const l = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (l) { lines.push(JSON.parse(l)); onLine && onLine(); } } });
+  });
+  const waitFor = (pred) => new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('timed out; got ' + JSON.stringify(lines))), 3000);
+    onLine = () => { if (lines.some(pred)) { clearTimeout(t); resolve(); } };
+    onLine();
+  });
+  await waitFor((l) => l.type === 'hello');
+  await fetch(`${base}/api/director/attach`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pid: Number(DPID) }) });
+
+  // Worker session appears, then its bridge connects → director should wake.
+  await fetch(`${base}/ingest`, { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ __hook: 'SessionStart', __pid: Number(WPID), payload: { session_id: WSID, cwd: '/tmp/woc-work' } }) });
+  const wsub = http.get(`${base}/api/channel/subscribe?pid=${WPID}`, (res) => res.resume());
+  await waitFor((l) => l.meta && l.meta.kind === 'worker-connected' && l.meta.session_id === WSID);
+
+  // The director's own bridge reconnecting must NOT wake it about itself.
+  const before = lines.length;
+  const dsub2 = http.get(`${base}/api/channel/subscribe?pid=${DPID}`, (res) => res.resume());
+  await new Promise((r) => setTimeout(r, 400));
+  assert.ok(!lines.slice(before).some((l) => l.meta && l.meta.kind === 'worker-connected' && l.meta.session_id === DSID), 'director woke about its own connect');
+
+  await fetch(`${base}/api/director/detach`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pid: Number(DPID) }) });
+  dsub.destroy(); wsub.destroy(); dsub2.destroy();
+});

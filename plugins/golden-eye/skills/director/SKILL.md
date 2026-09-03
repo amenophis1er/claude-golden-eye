@@ -68,7 +68,11 @@ strongest available model with extended thinking.
      it clears, re-send the worker protocol.
    - **session-end**: if the mission is unfinished, decide: wait for a
      resume, or ask the user to start a fresh worker session, then re-brief
-     it from `MISSION.md`.
+     it from `MISSION.md`. You will be woken automatically when a new worker
+     connects (worker-connected) — no need to poll.
+   - **worker-connected**: a session's channel just came up. Call
+     `list_sessions`; if it belongs to this mission, brief it with the worker
+     protocol. If unrelated, ignore it.
 3. Update `MISSION.md`, then END YOUR TURN. Never busy-wait, never poll.
 
 ## The tooling is not yours to fix (hard rule)
