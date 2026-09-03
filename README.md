@@ -301,9 +301,36 @@ zero-dependency server — end users need no build step.
 
 - The sidebar groups sessions **by project** (cwd), newest activity first, with a
   state dot per session (active / idle / stale) — several sessions of one repo no
-  longer read as duplicate projects. Stale sessions (and non-active forks) can be
+  longer read as duplicate projects. Each row carries a **live status line** so a
+  glance answers "who is blocked on me": an open question or approval shows amber
+  and pulsing, a working session shows its current tool (and running delegations)
+  with elapsed time, a finished turn with delegations still in flight says so
+  rather than claiming your turn, and a genuinely waiting session shows **your
+  turn** in blue. The session id moved to the row tooltip. Stale sessions (and non-active forks) can be
   pruned per-session or in bulk (persisted as `SessionPrune` tombstones so a server
   restart doesn't resurrect them). A `SessionEnd` hook marks closed sessions.
+- **Artifacts** — every claude.ai page published from a watched session, grouped
+  by project: favicon, title, publish count, capabilities, and a link to the
+  page (plus a chip per session in its header). Publishes are read from the
+  hook stream, so a redeploy updates one row instead of adding another; older
+  publishes are recovered from session transcripts when history is enabled,
+  and are marked "from transcript" (no title was recorded back then). A match
+  only counts inside an `Artifact` tool result — the same "Published … at …"
+  sentence in a shell result or assistant prose is not an artifact. This lists
+  what golden-eye *saw published here*, not the account's whole gallery: that
+  needs an authenticated claude.ai call this local, view-only server can't make.
+- **Project file viewer (opt-in)** — file paths shown in a session are
+  clickable: the `file_path` of any Read/Write/Edit tool call, and path-shaped
+  code spans in assistant prose (those resolve on click, so a false guess says
+  "not found" instead of dangling). The file opens read-only in an overlay,
+  markdown-rendered for `.md`. At a desk this duplicates your editor; on a
+  phone over the tailnet it is the only way to read what a session is talking
+  about. Because it serves project source over the network it has its own
+  switch, off by default: `"files": true` in `~/.golden-eye/config.json` (or
+  `GOLDEN_EYE_FILES=1`, or answer yes during `npx claude-golden-eye init`).
+  A requested path is resolved against that session's own cwd and its realpath
+  must stay inside it — traversal, absolute escapes and symlinks pointing out
+  are rejected, binaries refused, reads capped at 512 kB.
 - **Session history (opt-in)** — a read-only browser over every past session's
   transcript on disk: projects → sessions (first prompt, age, size) → transcript
   viewer, with a copyable `claude --resume <id>` command. Discovery is derived
