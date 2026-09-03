@@ -17,7 +17,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { headPeek } = require('./transcript');
+const { headPeek, artifactsFromTranscript } = require('./transcript');
 
 const MAX_SESSIONS_PER_PROJECT = 200;
 
@@ -127,4 +127,37 @@ function resolveTranscript(store, dirParam, id) {
   return path.join(dir, id + '.jsonl');
 }
 
-module.exports = { listProjects, resolveProjectDir, listSessions, resolveTranscript };
+/**
+ * Artifacts published from a project's past sessions, scanned from their
+ * transcripts. Same-id publishes across sessions collapse to one row (the
+ * newest session's copy wins). Bounded by MAX_SESSIONS_PER_PROJECT, and each
+ * file's scan is cached in transcript.js, so a repeat call is nearly free.
+ */
+function artifactsForProject(projectDir) {
+  let files;
+  try { files = fs.readdirSync(projectDir); } catch (_) { return []; }
+  const stamped = [];
+  for (const f of files) {
+    if (!f.endsWith('.jsonl')) continue;
+    const id = f.slice(0, -'.jsonl'.length);
+    if (!ID_RE.test(id)) continue;
+    const file = path.join(projectDir, f);
+    let stat;
+    try { stat = fs.statSync(file); } catch (_) { continue; }
+    if (!stat.isFile()) continue;
+    stamped.push({ file, id, mtimeMs: stat.mtimeMs, mtime: stat.mtime.toISOString() });
+  }
+  stamped.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  const byId = new Map();
+  for (const s of stamped.slice(0, MAX_SESSIONS_PER_PROJECT)) {
+    for (const a of artifactsFromTranscript(s.file)) {
+      // Newest session first, so an id already seen has a fresher record.
+      // lastAt comes from the transcript entry; the file mtime is the
+      // fallback for an entry that carried no timestamp.
+      if (!byId.has(a.id)) byId.set(a.id, { ...a, sessionId: s.id, lastAt: a.lastAt || s.mtime, backfilled: true });
+    }
+  }
+  return [...byId.values()];
+}
+
+module.exports = { listProjects, resolveProjectDir, listSessions, resolveTranscript, artifactsForProject };

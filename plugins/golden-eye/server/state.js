@@ -196,6 +196,7 @@ class Store {
         subModel: null,
         progress: null,
         agents: {},
+        artifacts: {},      // artifact_id -> published-page record (see PostToolUse)
         stats: { spawns: 0, toolCalls: 0, mainWrites: 0, denies: 0 },
       };
       this.sessions.set(p.session_id, s);
@@ -415,6 +416,31 @@ class Store {
           } else if (slot && p.duration_ms != null) {
             slot.durationMs = p.duration_ms;
           }
+        } else if (tool === 'Artifact') {
+          // Published artifacts (claude.ai pages). The Artifact tool also
+          // serves non-publish actions (db reads/writes, comments, listings)
+          // under the same name — a PUBLISH is the one whose response carries
+          // an artifact_id, so that field is the discriminator, not the tool.
+          const resp = p.tool_response && typeof p.tool_response === 'object' ? p.tool_response : {};
+          if (resp.artifact_id && typeof resp.url === 'string') {
+            const id = String(resp.artifact_id);
+            const inp = p.tool_input || {};
+            const prev = s.artifacts[id];
+            // Redeploys reuse the id: one row per artifact, publish-counted.
+            s.artifacts[id] = {
+              id,
+              url: resp.url,
+              title: resp.title || (prev && prev.title) || null,
+              favicon: inp.favicon || (prev && prev.favicon) || null,
+              description: inp.description || (prev && prev.description) || null,
+              path: resp.path || inp.file_path || (prev && prev.path) || null,
+              version: resp.version || null,
+              capabilities: Object.keys(resp.capabilities || inp.capabilities || {}),
+              publishes: (prev ? prev.publishes : 0) + 1,
+              firstAt: (prev && prev.firstAt) || e.__ts,
+              lastAt: e.__ts,
+            };
+          }
         } else {
           if (tool === 'TaskCreate') {
             // Modern todo system (TodoWrite is gone in 2.1.x). Mirror tasks.
@@ -558,6 +584,7 @@ class Store {
           lastResult: s.lastResult,
           todos: s.tasks.length ? s.tasks : s.todos,
           stats: s.stats,
+          artifacts: Object.values(s.artifacts).sort((a, b) => String(b.lastAt).localeCompare(String(a.lastAt))),
           agents: Object.values(s.agents).map((a) => ({
             ...a,
             tools: { ...a.tools },

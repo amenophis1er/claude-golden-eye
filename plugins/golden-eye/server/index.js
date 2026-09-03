@@ -12,7 +12,8 @@ const fs = require('fs');
 const path = require('path');
 const Store = require('./state');
 const { tailTranscript, sessionStats, agentMeta, sessionReplay } = require('./transcript');
-const { listProjects, resolveProjectDir, listSessions, resolveTranscript } = require('./history');
+const { listProjects, resolveProjectDir, listSessions, resolveTranscript, artifactsForProject } = require('./history');
+const { readProjectFile } = require('./projectfile');
 const { tasksForSession } = require('./tasks');
 const config = require('./config');
 
@@ -124,6 +125,16 @@ function historyConfigured() {
   return CONFIG_FILE.history === true;
 }
 const HISTORY_ENABLED = historyConfigured();
+
+// Project file peek: serves source files from a watched session's project, a
+// step up in exposure from transcripts and hook events — so it gets its own
+// switch (env wins, else config.json {"files": true}) and stays off by default.
+function filesConfigured() {
+  if (process.env.GOLDEN_EYE_FILES === '1') return true;
+  if (process.env.GOLDEN_EYE_FILES === '0') return false;
+  return CONFIG_FILE.files === true;
+}
+const FILES_ENABLED = filesConfigured();
 
 // Extra Host headers to accept beyond loopback (see hostAllowed). A reverse
 // proxy like `tailscale serve` forwards the original Host (e.g. the tailnet
@@ -385,7 +396,55 @@ const server = http.createServer(async (req, res) => {
         }
       }
       snapshot.historyEnabled = HISTORY_ENABLED;
+      snapshot.filesEnabled = FILES_ENABLED;
       return sendJson(res, 200, snapshot);
+    }
+
+    // ---------- read-only project file peek (opt-in) ----------
+    if (req.method === 'GET' && url.pathname === '/api/file') {
+      if (!FILES_ENABLED) return sendJson(res, 404, { error: 'file viewing disabled (set {"files": true} in config.json)' });
+      const sess = store.sessions.get(url.searchParams.get('sessionId') || '');
+      if (!sess || !sess.cwd) return sendJson(res, 404, { error: 'unknown session' });
+      const out = readProjectFile(sess.cwd, url.searchParams.get('path'));
+      return sendJson(res, out.error ? 400 : 200, out);
+    }
+
+    // ---------- published artifacts, grouped by project ----------
+    // Live-observed publishes (from hook events) are always available. Older
+    // ones exist only in transcripts, so that backfill rides the history
+    // opt-in — same on-disk exposure, same gate.
+    if (req.method === 'GET' && url.pathname === '/api/artifacts') {
+      const byCwd = new Map();
+      const bucket = (cwd) => {
+        const key = cwd || '(unknown)';
+        if (!byCwd.has(key)) byCwd.set(key, { cwd: key, artifacts: [] });
+        return byCwd.get(key);
+      };
+      const seen = new Set();
+      for (const s of store.sessions.values()) {
+        for (const a of Object.values(s.artifacts || {})) {
+          if (seen.has(a.id)) continue; // same artifact republished from 2 sessions
+          seen.add(a.id);
+          bucket(s.cwd).artifacts.push({ ...a, sessionId: s.id, backfilled: false });
+        }
+      }
+      if (HISTORY_ENABLED) {
+        for (const proj of listProjects(store)) {
+          for (const a of artifactsForProject(proj.dir)) {
+            if (seen.has(a.id)) continue; // a live record is richer — keep it
+            seen.add(a.id);
+            bucket(proj.cwd).artifacts.push(a);
+          }
+        }
+      }
+      const projects = [...byCwd.values()]
+        .map((p) => {
+          p.artifacts.sort((a, b) => String(b.lastAt).localeCompare(String(a.lastAt)));
+          return p;
+        })
+        .filter((p) => p.artifacts.length)
+        .sort((a, b) => String(b.artifacts[0].lastAt).localeCompare(String(a.artifacts[0].lastAt)));
+      return sendJson(res, 200, { projects, backfillEnabled: HISTORY_ENABLED });
     }
 
     // ---------- session history (read-only, opt-in) ----------

@@ -312,4 +312,94 @@ function headPeek(file) {
   }
 }
 
-module.exports = { tailTranscript, sessionStats, agentMeta, sessionReplay, headPeek };
+// ---------- artifact backfill (whole-file scan) ----------
+// Artifacts published before golden-eye watched a session live are only
+// recoverable from its transcript, where the Artifact tool's result reads
+// "Published <path> at <url>". Publishes can sit anywhere in the file, so
+// this is the one reader that scans it all.
+//
+// Accuracy matters more than it looks: that sentence also appears in ordinary
+// text — a Bash result quoting another transcript, a pasted log, an assistant
+// message about publishing. So a match only counts when it sits in the
+// tool_result of a tool_use whose name is "Artifact", which means correlating
+// tool_use_id across lines rather than grepping the file. Kept cheap by
+// JSON-parsing only lines that mention the tool or an artifact URL, and
+// cached by size+mtime (transcripts are append-only, so an unchanged file's
+// cached scan is exact).
+const ARTIFACT_URL_RE = /Published ([^\s"]+) at (https:\/\/claude\.ai\/code\/artifact\/([A-Za-z0-9_-]+))/;
+const SCAN_CHUNK = 1 << 20; // 1 MiB
+const artifactCache = new Map(); // path -> { key, value }
+
+function artifactsFromTranscript(file) {
+  let fd = null;
+  try {
+    const stat = fs.statSync(file);
+    const key = stat.size + ':' + stat.mtimeMs;
+    const hit = artifactCache.get(file);
+    if (hit && hit.key === key) return hit.value;
+    fd = fs.openSync(file, 'r');
+    const byId = new Map();
+    const pending = new Map(); // tool_use_id -> { favicon, description, path } from the Artifact call
+    const buf = Buffer.alloc(SCAN_CHUNK);
+    let carry = '';
+    let pos = 0;
+
+    const handleLine = (line) => {
+      // Cheap pre-filter: only these lines can matter, so the vast majority
+      // of a big transcript never reaches JSON.parse.
+      if (!line.includes('"Artifact"') && !line.includes('claude.ai/code/artifact')) return;
+      let j;
+      try { j = JSON.parse(line); } catch (_) { return; }
+      const msg = j.message;
+      const blocks = msg && Array.isArray(msg.content) ? msg.content : [];
+      for (const c of blocks) {
+        if (!c || typeof c !== 'object') continue;
+        if (c.type === 'tool_use' && c.name === 'Artifact' && c.id) {
+          const inp = c.input || {};
+          pending.set(c.id, {
+            favicon: inp.favicon || null,
+            description: inp.description || null,
+            path: inp.file_path || null,
+          });
+        } else if (c.type === 'tool_result' && c.tool_use_id && pending.has(c.tool_use_id)) {
+          const meta = pending.get(c.tool_use_id);
+          const m = ARTIFACT_URL_RE.exec(flattenContent(c.content));
+          if (!m) continue; // a non-publish Artifact action (db write, listing…)
+          const prev = byId.get(m[3]);
+          byId.set(m[3], {
+            id: m[3],
+            url: m[2],
+            title: null, // only the live hook response carries it
+            favicon: meta.favicon || (prev && prev.favicon) || null,
+            description: meta.description || (prev && prev.description) || null,
+            path: m[1] || meta.path || null,
+            publishes: (prev ? prev.publishes : 0) + 1,
+            firstAt: (prev && prev.firstAt) || j.timestamp || null,
+            lastAt: j.timestamp || (prev && prev.lastAt) || null,
+          });
+        }
+      }
+    };
+
+    while (pos < stat.size) {
+      const n = fs.readSync(fd, buf, 0, Math.min(SCAN_CHUNK, stat.size - pos), pos);
+      if (n <= 0) break;
+      const text = carry + buf.toString('utf8', 0, n);
+      const lines = text.split('\n');
+      carry = lines.pop() ?? ''; // last piece may be a partial line
+      for (const line of lines) if (line) handleLine(line);
+      pos += n;
+    }
+    if (carry) handleLine(carry);
+
+    const value = [...byId.values()];
+    artifactCache.set(file, { key, value });
+    return value;
+  } catch (_) {
+    return [];
+  } finally {
+    if (fd != null) try { fs.closeSync(fd); } catch (_) {}
+  }
+}
+
+module.exports = { tailTranscript, sessionStats, agentMeta, sessionReplay, headPeek, artifactsFromTranscript };

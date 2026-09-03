@@ -386,3 +386,43 @@ test('Notification while subagents run is stamped __active_agents at ingest', ()
   const replayed = add(store, 'Notification', { message: 'Claude is waiting for your input', __active_agents: 3 });
   assert.equal(replayed.payload.__active_agents, 3);
 });
+
+test('Artifact publishes are recorded per session and deduped by artifact id', () => {
+  const store = freshStore();
+  const publish = (id, title, updated) =>
+    add(store, 'PostToolUse', {
+      tool_name: 'Artifact',
+      tool_input: { file_path: '/tmp/page.html', favicon: '📊', description: 'a page' },
+      tool_response: {
+        url: 'https://claude.ai/code/artifact/' + id,
+        artifact_id: id,
+        title,
+        updated,
+        version: '1788445160-061a',
+        capabilities: { db: {} },
+      },
+    });
+  publish('art-1', 'My Page', false);
+  publish('art-1', 'My Page', true); // redeploy: same row, counted
+  publish('art-2', 'Other', false);
+
+  assert.equal(Object.keys(session(store).artifacts).length, 2);
+  const a1 = session(store).artifacts['art-1'];
+  assert.equal(a1.publishes, 2);
+  assert.equal(a1.title, 'My Page');
+  assert.equal(a1.favicon, '📊');
+  assert.deepEqual(a1.capabilities, ['db']);
+  assert.ok(a1.firstAt < a1.lastAt);
+  // Serialized newest-first for the UI.
+  assert.equal(store.serialize().sessions[0].artifacts[0].id, 'art-2');
+});
+
+test('non-publish Artifact actions (db writes, listings) are not artifacts', () => {
+  const store = freshStore();
+  add(store, 'PostToolUse', {
+    tool_name: 'Artifact',
+    tool_input: { action: 'write_db', db_op: 'set', collection: 'ticks', doc_id: 'vs-1', url: 'https://claude.ai/code/artifact/art-1' },
+    tool_response: { db_write: { op: 'set', collection: 'ticks', doc_id: 'vs-1', committed: true } },
+  });
+  assert.deepEqual(Object.keys(session(store).artifacts), []);
+});

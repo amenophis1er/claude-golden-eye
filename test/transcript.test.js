@@ -12,7 +12,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { tailTranscript, sessionStats, agentMeta } = require('../plugins/golden-eye/server/transcript');
+const { tailTranscript, sessionStats, agentMeta, artifactsFromTranscript } = require('../plugins/golden-eye/server/transcript');
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ge-transcript-'));
 test.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
@@ -186,4 +186,71 @@ test('sessionReplay: fresh session (no pre-boundary history) yields null', () =>
   ]);
   assert.equal(sessionReplay(file, '2026-09-01T10:00:00.000Z'), null);
   assert.equal(sessionReplay(path.join(tmp, 'missing.jsonl'), '2026-09-01T10:00:00.000Z'), null);
+});
+
+test('artifactsFromTranscript: only counts publishes inside an Artifact tool_result', () => {
+  const url = 'https://claude.ai/code/artifact/aaa-111';
+  const file = writeTranscript([
+    // A real publish: Artifact tool_use, then its paired result.
+    { type: 'assistant', timestamp: '2026-01-01T10:00:00Z', message: { content: [
+      { type: 'tool_use', id: 'toolu_A', name: 'Artifact', input: { file_path: '/tmp/p.html', favicon: '🎙️', description: 'desc' } },
+    ] } },
+    { type: 'user', timestamp: '2026-01-01T10:00:02Z', message: { content: [
+      { type: 'tool_result', tool_use_id: 'toolu_A', content: `Published /tmp/p.html at ${url}\n\nLive subscription: armed` },
+    ] } },
+    // Decoys that must NOT register: the same sentence in a Bash result
+    // (e.g. grepping another transcript) and in assistant prose.
+    { type: 'assistant', timestamp: '2026-01-01T10:01:00Z', message: { content: [
+      { type: 'tool_use', id: 'toolu_B', name: 'Bash', input: { command: 'grep artifact log' } },
+    ] } },
+    { type: 'user', timestamp: '2026-01-01T10:01:01Z', message: { content: [
+      { type: 'tool_result', tool_use_id: 'toolu_B', content: 'Published /other/x.html at https://claude.ai/code/artifact/bbb-222' },
+    ] } },
+    { type: 'assistant', timestamp: '2026-01-01T10:02:00Z', message: { content: [
+      { type: 'text', text: 'Published /tmp/q.html at https://claude.ai/code/artifact/ccc-333 earlier.' },
+    ] } },
+  ]);
+
+  const found = artifactsFromTranscript(file);
+  assert.deepEqual(found.map((a) => a.id), ['aaa-111']);
+  assert.equal(found[0].url, url);
+  assert.equal(found[0].favicon, '🎙️');
+  assert.equal(found[0].description, 'desc');
+  assert.equal(found[0].path, '/tmp/p.html');
+  assert.equal(found[0].publishes, 1);
+  assert.equal(found[0].lastAt, '2026-01-01T10:00:02Z');
+});
+
+test('artifactsFromTranscript: redeploys of one id collapse, non-publish results ignored', () => {
+  const file = writeTranscript([
+    { type: 'assistant', timestamp: '2026-01-02T10:00:00Z', message: { content: [
+      { type: 'tool_use', id: 'u1', name: 'Artifact', input: { file_path: '/tmp/p.html' } },
+    ] } },
+    { type: 'user', timestamp: '2026-01-02T10:00:01Z', message: { content: [
+      { type: 'tool_result', tool_use_id: 'u1', content: 'Published /tmp/p.html at https://claude.ai/code/artifact/dup-1' },
+    ] } },
+    { type: 'assistant', timestamp: '2026-01-02T11:00:00Z', message: { content: [
+      { type: 'tool_use', id: 'u2', name: 'Artifact', input: { file_path: '/tmp/p.html' } },
+    ] } },
+    { type: 'user', timestamp: '2026-01-02T11:00:01Z', message: { content: [
+      { type: 'tool_result', tool_use_id: 'u2', content: 'Published /tmp/p.html at https://claude.ai/code/artifact/dup-1' },
+    ] } },
+    // A db write through the Artifact tool: no "Published … at <url>" line.
+    { type: 'assistant', timestamp: '2026-01-02T12:00:00Z', message: { content: [
+      { type: 'tool_use', id: 'u3', name: 'Artifact', input: { action: 'write_db', db_op: 'set' } },
+    ] } },
+    { type: 'user', timestamp: '2026-01-02T12:00:01Z', message: { content: [
+      { type: 'tool_result', tool_use_id: 'u3', content: '{"db_write":{"committed":true}}' },
+    ] } },
+  ]);
+
+  const found = artifactsFromTranscript(file);
+  assert.equal(found.length, 1);
+  assert.equal(found[0].publishes, 2);
+  assert.equal(found[0].firstAt, '2026-01-02T10:00:01Z');
+  assert.equal(found[0].lastAt, '2026-01-02T11:00:01Z');
+});
+
+test('artifactsFromTranscript: missing file yields no artifacts', () => {
+  assert.deepEqual(artifactsFromTranscript(path.join(tmp, 'nope.jsonl')), []);
 });

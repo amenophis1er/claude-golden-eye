@@ -52,6 +52,8 @@ export interface SessionInfo {
     usageApprox: boolean;
   } | null;
   agents: AgentInfo[];
+  /** Artifacts this session published (deduped by artifact id). */
+  artifacts?: ArtifactInfo[];
   /** Transcript history older than the first observed hook event (resume backfill). */
   replay?: ReplayEntry[];
   /** Composer availability: server opt-in + this session's channel bridge live. */
@@ -94,6 +96,30 @@ export interface DashState {
   events: HookEvent[];
   /** Server opt-in for the read-only session history browser. */
   historyEnabled?: boolean;
+  /** Server opt-in for the read-only project file viewer. */
+  filesEnabled?: boolean;
+}
+
+export interface ArtifactInfo {
+  id: string;
+  url: string;
+  title: string | null;
+  favicon: string | null;
+  description?: string | null;
+  path: string | null;
+  version?: string | null;
+  capabilities?: string[];
+  publishes: number;
+  firstAt: string | null;
+  lastAt: string | null;
+  sessionId?: string;
+  /** Recovered from a transcript (older publish) rather than observed live. */
+  backfilled: boolean;
+}
+
+export interface ArtifactProject {
+  cwd: string;
+  artifacts: ArtifactInfo[];
 }
 
 export interface HistoryProject {
