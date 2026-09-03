@@ -426,3 +426,57 @@ test('non-publish Artifact actions (db writes, listings) are not artifacts', () 
   });
   assert.deepEqual(Object.keys(session(store).artifacts), []);
 });
+
+test('background shells are tracked from launch until their completion notice', () => {
+  const store = freshStore();
+  const launch = (id, cmd) =>
+    add(store, 'PostToolUse', {
+      tool_name: 'Bash',
+      tool_input: { command: cmd, run_in_background: true, description: 'watch CI' },
+      tool_response: { stdout: '', stderr: '', backgroundTaskId: id },
+    });
+  launch('bmv0lo3tb', 'sleep 60; check ci');
+  launch('b5m71wipc', 'tail -f log');
+  assert.equal(Object.keys(session(store).shells).length, 2);
+  assert.equal(session(store).shells['bmv0lo3tb'].command, 'sleep 60; check ci');
+
+  // The harness announces completion as a task-notification prompt.
+  add(store, 'UserPromptSubmit', {
+    prompt: '<task-notification>\n<task-id>bmv0lo3tb</task-id>\n<status>completed</status>\n<summary>Background command "watch CI" completed</summary>\n</task-notification>',
+  });
+  assert.deepEqual(Object.keys(session(store).shells), ['b5m71wipc']);
+
+  // An agent notification uses the same envelope but never matches a shell.
+  add(store, 'UserPromptSubmit', {
+    prompt: '<task-notification>\n<task-id>a0f9385635ac21598</task-id>\n<summary>Agent "x" finished</summary>\n</task-notification>',
+  });
+  assert.deepEqual(Object.keys(session(store).shells), ['b5m71wipc']);
+  assert.equal(store.serialize().sessions[0].shells.length, 1);
+});
+
+test('a foreground Bash is not tracked as a background shell', () => {
+  const store = freshStore();
+  add(store, 'PostToolUse', {
+    tool_name: 'Bash',
+    tool_input: { command: 'ls' },
+    tool_response: { stdout: 'a\nb', stderr: '' },
+  });
+  assert.deepEqual(Object.keys(session(store).shells), []);
+});
+
+test('BashOutput reads attach to the shell they polled', () => {
+  const store = freshStore();
+  add(store, 'PostToolUse', {
+    tool_name: 'Bash',
+    tool_input: { command: 'tail -f log', run_in_background: true },
+    tool_response: { backgroundTaskId: 'bxyz12345' },
+  });
+  add(store, 'PostToolUse', {
+    tool_name: 'BashOutput',
+    tool_input: { bash_id: 'bxyz12345' },
+    tool_response: { stdout: 'line one\nline two', stderr: '' },
+  });
+  const sh = session(store).shells['bxyz12345'];
+  assert.equal(sh.lastOutput, 'line one\nline two');
+  assert.ok(sh.lastReadAt);
+});

@@ -254,3 +254,31 @@ test('artifactsFromTranscript: redeploys of one id collapse, non-publish results
 test('artifactsFromTranscript: missing file yields no artifacts', () => {
   assert.deepEqual(artifactsFromTranscript(path.join(tmp, 'nope.jsonl')), []);
 });
+
+test('tool entries carry their id; results carry forId and mark empty output', () => {
+  const file = writeTranscript([
+    { type: 'assistant', timestamp: '2026-02-01T10:00:00Z', message: { content: [
+      { type: 'tool_use', id: 'toolu_1', name: 'Bash', input: { command: 'kubectl rollout status' } },
+    ] } },
+    { type: 'user', timestamp: '2026-02-01T10:00:30Z', message: { content: [
+      { type: 'tool_result', tool_use_id: 'toolu_1', content: 'deployment rolled out' },
+    ] } },
+    // A silent command: the result carries no text but still proves the call
+    // finished, so the viewer must not show it as forever in-flight.
+    { type: 'assistant', timestamp: '2026-02-01T10:01:00Z', message: { content: [
+      { type: 'tool_use', id: 'toolu_2', name: 'Bash', input: { command: 'true' } },
+    ] } },
+    { type: 'user', timestamp: '2026-02-01T10:01:01Z', message: { content: [
+      { type: 'tool_result', tool_use_id: 'toolu_2', content: '' },
+    ] } },
+  ]);
+
+  const { entries } = tailTranscript(file);
+  const tools = entries.filter((e) => e.kind === 'tool');
+  const results = entries.filter((e) => e.kind === 'result');
+  assert.deepEqual(tools.map((t) => t.id), ['toolu_1', 'toolu_2']);
+  assert.deepEqual(results.map((r) => r.forId), ['toolu_1', 'toolu_2']);
+  assert.equal(results[0].empty, false);
+  assert.equal(results[1].empty, true);
+  assert.equal(results[1].text, '');
+});

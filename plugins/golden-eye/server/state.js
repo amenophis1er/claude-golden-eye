@@ -57,6 +57,11 @@ function rotateLines(lines) {
   return preserved.concat(kept);
 }
 
+/** tool_response as an object, or {} — hook payloads are untrusted shapes. */
+function resp0(p) {
+  return p && p.tool_response && typeof p.tool_response === 'object' ? p.tool_response : {};
+}
+
 function newAgent(overrides = {}) {
   return Object.assign(
     {
@@ -197,6 +202,7 @@ class Store {
         progress: null,
         agents: {},
         artifacts: {},      // artifact_id -> published-page record (see PostToolUse)
+        shells: {},         // backgroundTaskId -> still-running background command
         stats: { spawns: 0, toolCalls: 0, mainWrites: 0, denies: 0 },
       };
       this.sessions.set(p.session_id, s);
@@ -304,6 +310,11 @@ class Store {
       }
 
       case 'UserPromptSubmit': {
+        // "Background command … completed" clears the shell it names. Agent
+        // notifications use the same envelope but their ids never match a
+        // shell, so no special-casing is needed.
+        const done = /<task-id>([^<]+)<\/task-id>/.exec(String(p.prompt || ''));
+        if (done && s.shells[done[1]]) delete s.shells[done[1]];
         s.state = 'working';
         s.lastPrompt = typeof p.prompt === 'string' ? p.prompt : s.lastPrompt;
         s.lastPromptAt = e.__ts;
@@ -416,6 +427,32 @@ class Store {
           } else if (slot && p.duration_ms != null) {
             slot.durationMs = p.duration_ms;
           }
+        } else if (tool === 'BashOutput') {
+          // The only window into a running shell: when the agent reads it, the
+          // result passes through here. Match by scanning the input for a
+          // tracked id rather than guessing the parameter name.
+          const inp = JSON.stringify(p.tool_input || {});
+          const hit = Object.keys(s.shells).find((id) => inp.includes(id));
+          if (hit) {
+            const r = resp0(p);
+            const text = [r.stdout, r.stderr].filter((x) => typeof x === 'string' && x).join('\n');
+            s.shells[hit].lastOutput = text ? text.slice(-2000) : '';
+            s.shells[hit].lastReadAt = e.__ts;
+          }
+        } else if (resp0(p).backgroundTaskId) {
+          // Background shell launched. Claude Code returns immediately with a
+          // backgroundTaskId and keeps the process alive; the terminal footer
+          // counts these as "N shells". The completion signal arrives later as
+          // a <task-notification> carrying the same id (see UserPromptSubmit),
+          // so this can be tracked honestly rather than only ever counting up.
+          const id = String(resp0(p).backgroundTaskId);
+          s.shells[id] = {
+            id,
+            command: (p.tool_input && p.tool_input.command) || null,
+            description: (p.tool_input && p.tool_input.description) || null,
+            agentId: p.agent_id || null,
+            startedAt: e.__ts,
+          };
         } else if (tool === 'Artifact') {
           // Published artifacts (claude.ai pages). The Artifact tool also
           // serves non-publish actions (db reads/writes, comments, listings)
@@ -585,6 +622,7 @@ class Store {
           todos: s.tasks.length ? s.tasks : s.todos,
           stats: s.stats,
           artifacts: Object.values(s.artifacts).sort((a, b) => String(b.lastAt).localeCompare(String(a.lastAt))),
+          shells: Object.values(s.shells).sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt))),
           agents: Object.values(s.agents).map((a) => ({
             ...a,
             tools: { ...a.tools },

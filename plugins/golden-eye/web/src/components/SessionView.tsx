@@ -1,4 +1,5 @@
-import { Activity, Bot, Crown, ExternalLink, GitBranch, GitFork, Radio, ScrollText, Target } from 'lucide-react';
+import { useState } from 'react';
+import { Activity, Bot, Crown, ExternalLink, GitBranch, GitFork, Radio, ScrollText, Target, TerminalSquare, ChevronDown } from 'lucide-react';
 import type { HookEvent, SessionInfo } from '../lib/types';
 import { navigate, type Tab } from '../lib/router';
 import { baseName, fmtTokens, relTime, shortId } from '../lib/format';
@@ -29,6 +30,7 @@ function StatChip({ label, value, alert }: { label: string; value: number; alert
 export default function SessionView({ session: s, events, tab, sub, now }: {
   session: SessionInfo; events: HookEvent[]; tab: Tab; sub: string | null; now: number;
 }) {
+  const [showShells, setShowShells] = useState(false);
   const sessionEvents = events.filter((e) => e.payload?.session_id === s.id);
   const delegates = s.agents.filter((a) => !a.mainAgent);
   const delegatesRunning = delegates.some((a) => a.status === 'running' || a.status === 'starting');
@@ -168,6 +170,21 @@ export default function SessionView({ session: s, events, tab, sub, now }: {
           <StatChip label="delegations" value={s.stats.spawns} />
           <StatChip label="tool calls" value={s.stats.toolCalls} />
           <StatChip label="writes blocked" value={s.stats.denies} alert />
+          {/* Background commands still running — the terminal's "N shells".
+              Informational: a running shell does not mean Claude is working,
+              so it never changes the session state badge. */}
+          {!!s.shells?.length && (
+            <button
+              onClick={() => setShowShells((v) => !v)}
+              title="background commands still running — click to inspect"
+              className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 px-2.5 py-0.5 text-xs text-emerald-700 transition-colors hover:bg-emerald-50 dark:border-emerald-900 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+            >
+              <TerminalSquare size={11} />
+              <span className="font-semibold tabular-nums">{s.shells.length}</span>
+              {s.shells.length === 1 ? 'shell' : 'shells'} running
+              <ChevronDown size={11} className={`transition-transform ${showShells ? 'rotate-180' : ''}`} />
+            </button>
+          )}
           {/* Artifacts this session published — the page itself is one click
               away, so link each rather than just counting them. */}
           {s.artifacts?.map((a) => (
@@ -185,6 +202,32 @@ export default function SessionView({ session: s, events, tab, sub, now }: {
             </a>
           ))}
         </div>
+
+        {/* Capped + scrollable: shells are occasional detail, so inspecting
+            them must never push the live feed off the screen. */}
+        {showShells && !!s.shells?.length && (
+          <div className="mt-2 max-h-52 space-y-1.5 overflow-y-auto rounded-lg border border-zinc-200 p-2.5 dark:border-zinc-800">
+            {s.shells.map((sh) => (
+              <div key={sh.id} className="text-xs">
+                <div className="flex items-baseline gap-2">
+                  <span className="spin-ring mt-0.5 inline-block h-2 w-2 shrink-0 text-emerald-500" />
+                  <span className="min-w-0 flex-1 truncate font-medium">{sh.description || 'background command'}</span>
+                  <span className="shrink-0 text-[11px] text-zinc-400 tabular-nums">{relTime(sh.startedAt, now)}</span>
+                </div>
+                {sh.command && (
+                  <pre className="mt-1 ml-4 max-h-16 overflow-auto rounded bg-zinc-100 p-1.5 font-mono text-[10px] whitespace-pre-wrap dark:bg-zinc-900">{sh.command}</pre>
+                )}
+                {sh.lastOutput ? (
+                  <pre className="mt-1 ml-4 max-h-32 overflow-auto rounded bg-zinc-100 p-1.5 font-mono text-[10px] whitespace-pre-wrap text-zinc-500 dark:bg-zinc-900">{sh.lastOutput}</pre>
+                ) : (
+                  <p className="mt-1 ml-4 text-[10px] text-zinc-400">
+                    Output stays inside Claude Code until the session reads it — nothing to show yet.
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
 
         <nav className="mt-3 flex gap-1">
           {TABS.map(({ id, label, icon: Icon }) => (

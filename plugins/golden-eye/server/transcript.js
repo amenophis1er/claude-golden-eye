@@ -64,7 +64,7 @@ function parseLine(line, entries, meta) {
       } else if (c.type === 'text' && typeof c.text === 'string' && c.text.trim()) {
         entries.push({ ts, kind: 'text', text: SNIP(c.text, 4000) });
       } else if (c.type === 'tool_use') {
-        entries.push({ ts, kind: 'tool', name: c.name || '?', input: toolInputBrief(c.input) });
+        entries.push({ ts, kind: 'tool', id: c.id || null, name: c.name || '?', input: toolInputBrief(c.input) });
       }
     }
   } else if (j.type === 'user' && msg) {
@@ -77,7 +77,17 @@ function parseLine(line, entries, meta) {
       if (!c || typeof c !== 'object') continue;
       if (c.type === 'tool_result') {
         const text = flattenContent(c.content).trim();
-        if (text) entries.push({ ts, kind: 'result', text: SNIP(text, 600), isError: !!c.is_error });
+        // A result with no text still has to be recorded — it is the proof
+        // that the call finished. Without it a silent command looks in-flight
+        // forever in the transcript view.
+        entries.push({
+          ts,
+          kind: 'result',
+          forId: c.tool_use_id || null,
+          text: text ? SNIP(text, 600) : '',
+          isError: !!c.is_error,
+          empty: !text,
+        });
       } else if (c.type === 'text' && typeof c.text === 'string' && !j.isMeta) {
         const text = c.text.trim();
         // Real prompts only: skip command expansions, caveat banners and

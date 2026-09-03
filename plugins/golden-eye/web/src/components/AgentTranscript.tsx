@@ -95,7 +95,7 @@ export default function AgentTranscript({ sessionId, agentId, running, fill = fa
       }}
       className={`mt-1.5 overflow-y-auto rounded-md border border-zinc-200 bg-white p-2 dark:border-zinc-800 dark:bg-zinc-950/60 ${fill ? 'min-h-0 flex-1' : 'max-h-96'}`}
     >
-      <TranscriptEntryList entries={entries} newestFirst={newestFirst} sessionId={sessionId} />
+      <TranscriptEntryList entries={entries} newestFirst={newestFirst} sessionId={sessionId} running={running} />
     </div>
     </div>
   );
