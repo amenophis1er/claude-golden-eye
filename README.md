@@ -40,6 +40,17 @@ opt in non-interactively). It targets the current `CLAUDE_CONFIG_DIR`
 
 - **Upgrade:** `npx claude-golden-eye@latest init` (re-runs are idempotent)
 - **Remove:** `npx claude-golden-eye uninstall` (`--purge` also deletes data)
+- **No npm registry?** The same installer runs straight from GitHub — nothing
+  global, nothing published needed. The three specs are *not* equivalent:
+
+  | command | installs |
+  | --- | --- |
+  | `npx claude-golden-eye@latest init` | the latest **published release** (needs the npm registry) |
+  | `npx github:amenophis1er/claude-golden-eye#v0.1.3 init` | that exact **tag** — reproducible, no registry involved |
+  | `npx github:amenophis1er/claude-golden-eye init` | the default branch's **HEAD**, which may be ahead of any release |
+
+  A bare GitHub spec tracks `main`, not the newest tag, so pin the tag unless
+  you specifically want unreleased code.
 
 **Without npm** — the repo is itself a Claude Code marketplace:
 
@@ -90,7 +101,8 @@ Optional history migration (dev sessions live in the repo's store):
 
 ```
 /pm on — MISSION: ship the payments refactor; subagents only
-/pm on --sub opus MISSION: fable PM, opus workforce
+/pm on --sub sonnet MISSION: cheaper workforce for a mechanical sweep
+/pm on --sub none MISSION: let each spawn pick its own model
 /pm off
 ```
 
@@ -104,11 +116,14 @@ parses, so it works even before the skill expands.)
 - Main-session `Edit/Write/MultiEdit/NotebookEdit` are **hook-denied** with a
   delegation-first reason; subagents keep full access (`agent_id` discrimination).
 - `Bash` stays allowed (charter asks for read-only discipline — soft rule).
-- **Subagent model pin** — `--sub <model>` (e.g. `--sub opus`) forces every delegation
-  onto that model: the charter instructs the PM to set the Agent tool's `model` field,
-  and the `PreToolUse` hook hard-rewrites the spawn input (`updatedInput`) if it is
-  missing or different — logged as a `PMModelPin` event. The main agent keeps the
-  session model (`/model`), so e.g. a Fable PM can run an all-Opus workforce.
+- **Subagent model pin** — delegations run on **opus by default**. PM mode exists to
+  push all implementation onto subagents, so that is where capability matters; the main
+  agent keeps the session model (`/model`), so a Fable PM runs an all-Opus workforce
+  without being asked. `--sub <model>` picks a different one and `--sub none`
+  (`off`/`inherit`/`default`) disables pinning so each spawn keeps whatever it asked for.
+  Enforcement: the charter instructs the PM to set the Agent tool's `model` field, and the
+  `PreToolUse` hook hard-rewrites the spawn input (`updatedInput`) if it is missing or
+  different — logged as a `PMModelPin` event.
 - Enforcement **fails open**: dashboard down ⇒ sessions run normally.
 
 ## Agent self-reporting (MCP)
@@ -253,6 +268,13 @@ delegation stats on the dashboard.
 
 ## Environment variables
 
+The three opt-in features (composer, history, files) can also be set
+persistently in `<data dir>/config.json` — `{"composer": true, "history": true,
+"files": true}` — which survives every spawn path (SessionStart bootstrap,
+launchd, manual). The env var wins when set: `1` forces on, `0` forces off even
+if config.json enables it. All are read once at server start, so changing either
+needs a server restart.
+
 | Variable | Default | Purpose |
 |---|---|---|
 | `GOLDEN_EYE_DATA_DIR` | `~/.golden-eye` | store + server.json |
@@ -263,6 +285,8 @@ delegation stats on the dashboard.
 | `GOLDEN_EYE_NOTIFY` | on | set `0` to disable notifications |
 | `GOLDEN_EYE_LOG_DIR` | `<data dir>/logs` | hooks' fallback JSONL log location |
 | `GOLDEN_EYE_COMPOSER` | off | `1` = enable the dashboard composer (channel injection) |
+| `GOLDEN_EYE_HISTORY` | off | `1` = enable the read-only session history browser |
+| `GOLDEN_EYE_FILES` | off | `1` = enable the read-only project file viewer |
 | `GOLDEN_EYE_ALLOWED_HOSTS` | none | comma-separated extra `Host` values to accept (reverse proxies / tailnet name) |
 | `GOLDEN_EYE_DISABLE_POST` | unset | `1` = local logging only |
 
@@ -347,6 +371,14 @@ zero-dependency server — end users need no build step.
 - UI development: `cd plugins/golden-eye/web && npm install && npm run dev` (Vite
   proxies `/api` + `/pm` to `127.0.0.1:7717`). Ship with `npm run build` and commit
   `web/dist/`.
+- **Running the installer without npx**: `bin/cli.js` is a plain node script, so
+  from a clone `node bin/cli.js init` (same flags) does exactly what `npx` would
+  — useful for testing the install path, or when the registry is unreachable.
+  `npm pack` + `npx ./claude-golden-eye-<v>.tgz init` tests the packed artifact.
+  **But don't use `init` for day-to-day development**: it copies a payload to
+  `~/.golden-eye/app` and repoints the marketplace there, so a repo-backed dev
+  install gets silently switched to a snapshot and your edits stop reaching it.
+  For that loop, keep the marketplace on the repo and use `dev-sync.sh` below.
 - **Propagating code changes**: installed plugins run from a per-version cache
   snapshot (`<config dir>/plugins/cache/claude-golden-eye/…`), and
   `claude plugin update` skips same-version updates — so repo edits never reach

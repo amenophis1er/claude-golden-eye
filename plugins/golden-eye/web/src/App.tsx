@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Eye } from 'lucide-react';
+import Logo from './components/Logo';
 import { useDashboard } from './lib/useDashboard';
 import { navigate, useRoute } from './lib/router';
 import Sidebar from './components/Sidebar';
@@ -48,7 +48,7 @@ export default function App() {
           <SessionView session={session} events={state?.events ?? []} tab={route.tab} sub={route.sub} now={now} />
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-zinc-400">
-            <Eye size={40} strokeWidth={1.5} />
+            <Logo size={44} className="opacity-70" />
             <p className="text-sm">No sessions yet — start a Claude Code session and it will appear here.</p>
           </div>
         )}
