@@ -527,6 +527,15 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
+    if (req.method === 'GET' && url.pathname === '/api/director/status') {
+      // Cheap lookup for the scoped-auto-approve hook: is this session a
+      // director? (session id -> claude pid -> directors map)
+      const sid = url.searchParams.get('sessionId');
+      const s = sid ? store.sessions.get(sid) : null;
+      const isDirector = !!(s && directorFor(s.claudePid));
+      return sendJson(res, 200, { isDirector });
+    }
+
     if (req.method === 'POST' && url.pathname === '/api/director/detach') {
       const body = await readJsonBody(req);
       const pid = body && body.pid != null ? String(body.pid) : null;

@@ -92,6 +92,14 @@ DONE criteria that cannot be met as written; a worker looping (same failure
 twice) after one corrective attempt. When in doubt, escalate. A stalled
 mission is recoverable; a wrong irreversible action is not.
 
+## Permissions
+
+Your own instruments — the golden-eye MCP tools and edits to `MISSION.md` —
+are auto-approved for a director session (a golden-eye hook does this), so you
+do NOT need the session in auto/bypass mode to run unattended. Anything
+else you attempt (Bash, writing other files) still prompts the human by
+design — that floor is deliberate; do not ask the user to remove it.
+
 ## Hygiene
 
 - One action per wake where possible; keep instructions to workers short and

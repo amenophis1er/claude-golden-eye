@@ -501,3 +501,33 @@ test('director: attach routes worker events over the bridge; own session + non-w
   assert.equal(st2.sessions.find((x) => x.id === DSID).isDirector, false);
   sub.destroy();
 });
+
+test('director status endpoint: true only for an attached director session', async () => {
+  const DPID = '76543';
+  const DSID = 'status-director';
+  await fetch(`${base}/ingest`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ __hook: 'SessionStart', __ts: new Date().toISOString(), __pid: Number(DPID), payload: { session_id: DSID, cwd: '/tmp/sd' } }),
+  });
+  // Not a director yet.
+  let r = await (await fetch(`${base}/api/director/status?sessionId=${DSID}`)).json();
+  assert.equal(r.isDirector, false);
+  // Unknown session → false, never an error.
+  r = await (await fetch(`${base}/api/director/status?sessionId=nope`)).json();
+  assert.equal(r.isDirector, false);
+  // Attach → true.
+  await fetch(`${base}/api/director/attach`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ pid: Number(DPID) }),
+  });
+  r = await (await fetch(`${base}/api/director/status?sessionId=${DSID}`)).json();
+  assert.equal(r.isDirector, true);
+  // Detach → false again.
+  await fetch(`${base}/api/director/detach`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ pid: Number(DPID) }),
+  });
+  r = await (await fetch(`${base}/api/director/status?sessionId=${DSID}`)).json();
+  assert.equal(r.isDirector, false);
+});
