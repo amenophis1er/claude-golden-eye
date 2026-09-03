@@ -1,5 +1,7 @@
 export interface AgentInfo {
   id: string | null;
+  /** Bound claude agent_id; null while still an unbound spawn placeholder. */
+  boundId?: string | null;
   mainAgent: boolean;
   type: string | null;
   description: string | null;
@@ -54,6 +56,17 @@ export interface SessionInfo {
   agents: AgentInfo[];
   /** Artifacts this session published (deduped by artifact id). */
   artifacts?: ArtifactInfo[];
+  /** Background commands still running (Claude Code's "N shells"). */
+  shells?: {
+    id: string;
+    command: string | null;
+    description: string | null;
+    agentId: string | null;
+    startedAt: string;
+    /** Output captured when the agent last read this shell (BashOutput). */
+    lastOutput?: string;
+    lastReadAt?: string;
+  }[];
   /** Transcript history older than the first observed hook event (resume backfill). */
   replay?: ReplayEntry[];
   /** Composer availability: server opt-in + this session's channel bridge live. */
@@ -98,6 +111,8 @@ export interface DashState {
   historyEnabled?: boolean;
   /** Server opt-in for the read-only project file viewer. */
   filesEnabled?: boolean;
+  /** Version of the plugin code the running server was started from. */
+  version?: string | null;
 }
 
 export interface ArtifactInfo {

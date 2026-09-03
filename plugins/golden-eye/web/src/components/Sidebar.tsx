@@ -1,10 +1,12 @@
 import { useMemo } from 'react';
-import { Eye, Crown, GitFork, History, LayoutTemplate, X, Trash2 } from 'lucide-react';
+import { Crown, GitFork, History, LayoutTemplate, X, Trash2 } from 'lucide-react';
 import type { DashState, SessionInfo } from '../lib/types';
 import { pruneSessions } from '../lib/useDashboard';
 import { navigate, navigateArtifacts, navigateHistory, type Tab } from '../lib/router';
 import { baseName, elapsed, relTime, shortId } from '../lib/format';
+import { liveDelegateCount } from '../lib/agents';
 import ThemeToggle from './ThemeToggle';
+import Logo, { Wordmark } from './Logo';
 
 const STALE_MS = 2 * 60 * 60 * 1000;
 // A genuinely working session emits hook events constantly; with none for
@@ -34,7 +36,7 @@ function groupOf(s: SessionInfo, now: number): 'active' | 'idle' | 'stale' {
 type StatusKind = 'attention' | 'working' | 'waiting' | 'done';
 
 function statusOf(s: SessionInfo, group: 'active' | 'idle' | 'stale', now: number) {
-  const running = s.agents.filter((a) => !a.mainAgent && (a.status === 'running' || a.status === 'starting')).length;
+  const running = liveDelegateCount(s.agents, now);
   const agentsText = `${running} agent${running > 1 ? 's' : ''}`;
   const attention = 'text-amber-600 dark:text-amber-400';
 
@@ -66,9 +68,12 @@ function statusOf(s: SessionInfo, group: 'active' | 'idle' | 'stale', now: numbe
     };
   }
   if (group === 'idle') {
+    // A background shell keeps running while the turn is genuinely yours —
+    // mention it, but do not pretend the session is still working.
+    const shells = s.shells?.length ?? 0;
     return {
       kind: 'waiting' as StatusKind,
-      text: 'your turn',
+      text: shells ? `your turn · ${shells} shell${shells > 1 ? 's' : ''}` : 'your turn',
       time: elapsed(s.lastActivity, now),
       tone: 'text-sky-600 dark:text-sky-400',
     };
@@ -181,8 +186,8 @@ export default function Sidebar({ state, connected, now, selectedId, tab, histor
   return (
     <aside className="flex w-72 shrink-0 flex-col border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/40">
       <div className="flex items-center gap-2.5 border-b border-zinc-200 px-4 py-3.5 dark:border-zinc-800">
-        <Eye size={20} className="text-amber-500" />
-        <span className="flex-1 font-semibold tracking-tight">golden-eye</span>
+        <Logo size={22} />
+        <Wordmark className="flex-1" />
         <span
           className={`h-2 w-2 rounded-full ${connected ? 'bg-emerald-500' : 'bg-red-500 pulse-dot'}`}
           title={connected ? 'live' : 'reconnecting…'}
@@ -242,8 +247,24 @@ export default function Sidebar({ state, connected, now, selectedId, tab, histor
           <History size={14} /> History
         </button>
       )}
-      <div className="border-t border-zinc-200 px-4 py-2 text-[11px] text-zinc-400 dark:border-zinc-800">
-        {state ? `${state.sessions.length} session(s) · ${state.events.length} events cached` : 'connecting…'}
+      <div className="flex items-center gap-1.5 border-t border-zinc-200 px-4 py-2 text-[11px] text-zinc-400 dark:border-zinc-800">
+        {state ? (
+          <>
+            {state.version && (
+              <span
+                className="shrink-0 font-mono"
+                title="version of the plugin code this server is running — if it lags the installed version, the server predates the update"
+              >
+                v{state.version}
+              </span>
+            )}
+            <span className="min-w-0 truncate">
+              {state.version ? '· ' : ''}{state.sessions.length} session(s) · {state.events.length} events cached
+            </span>
+          </>
+        ) : (
+          'connecting…'
+        )}
       </div>
     </aside>
   );

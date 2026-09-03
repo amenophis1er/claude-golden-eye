@@ -22,4 +22,19 @@ const LOCK_FILE = path.join(DATA_DIR, 'server.lock');
 
 const EVENTS_FILE = path.join(DATA_DIR, 'events.jsonl');
 
-module.exports = { DATA_DIR, PORT_CANDIDATES, SERVER_FILE, LOCK_FILE, EVENTS_FILE };
+// The version of the code actually running, read from the plugin manifest
+// that ships beside it. Deliberately not the registered/installed version:
+// a server started before an update keeps serving the old code, and showing
+// THAT is the point — it makes a stale process visible instead of silent.
+function readVersion() {
+  try {
+    return JSON.parse(
+      require('fs').readFileSync(require('path').join(__dirname, '..', '.claude-plugin', 'plugin.json'), 'utf8')
+    ).version || null;
+  } catch (_) {
+    return null; // running from a source tree without the manifest
+  }
+}
+const VERSION = readVersion();
+
+module.exports = { DATA_DIR, PORT_CANDIDATES, SERVER_FILE, LOCK_FILE, EVENTS_FILE, VERSION };

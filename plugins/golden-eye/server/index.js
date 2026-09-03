@@ -58,17 +58,21 @@ function notifyDesktop(title, body) {
   } catch (_) {}
 }
 
+// Desktop notifications are for moments that want a HUMAN, not a feed of
+// everything that happens. Routine completions are deliberately silent:
+//  - Stop (turn ended) would ping after every single turn, and Claude Code's
+//    own idle notification already says the same thing 60s later — so keeping
+//    it meant two alerts per turn.
+//  - SubagentStop would ping once per delegation; a PM run with 29 of them
+//    buried the one alert that mattered under 29 that did not.
+// Both still appear in the dashboard feed, which is where FYI belongs.
 function maybeNotify(ev) {
   if (!ev) return;
   const p = ev.payload || {};
-  if (ev.__hook === 'SubagentStop') {
-    notifyDesktop('golden-eye: subagent finished', String(p.last_assistant_message || ''));
-  } else if (ev.__hook === 'PMDeny') {
+  if (ev.__hook === 'PMDeny') {
     notifyDesktop('golden-eye: PM write blocked', String(p.tool_name || ''));
   } else if (ev.__hook === 'MCPProgress' && p.state === 'blocked') {
     notifyDesktop('golden-eye: MISSION BLOCKED', String(p.note || ''));
-  } else if (ev.__hook === 'Stop') {
-    notifyDesktop('golden-eye: turn ended', String(p.last_assistant_message || ''));
   } else if (ev.__hook === 'Notification') {
     // Claude Code's own "needs your attention" signal (permission prompt,
     // waiting for input) — the walk-away case this dashboard exists for.
@@ -397,6 +401,7 @@ const server = http.createServer(async (req, res) => {
       }
       snapshot.historyEnabled = HISTORY_ENABLED;
       snapshot.filesEnabled = FILES_ENABLED;
+      snapshot.version = config.VERSION;
       return sendJson(res, 200, snapshot);
     }
 
@@ -627,7 +632,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && url.pathname === '/healthz') {
-      return sendJson(res, 200, { ok: true, name: 'golden-eye', sessions: store.sessions.size, clients: sseClients.size });
+      return sendJson(res, 200, { ok: true, name: 'golden-eye', version: config.VERSION, sessions: store.sessions.size, clients: sseClients.size });
     }
 
     if (req.method === 'GET' && serveStatic(res, url.pathname)) return;
