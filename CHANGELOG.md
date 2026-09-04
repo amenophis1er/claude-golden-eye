@@ -23,6 +23,12 @@ version has no section — so this file cannot silently fall behind.
   `GOLDEN_EYE_UPDATE_CHECK=1`): once a day, cached, silent on failure, never
   auto-updating, and it names the command that fits how this copy was installed.
 
+- **`/golden-eye:server status|start|stop|restart`** — the dashboard server had
+  no documented way to be restarted, which mattered because changed opt-ins are
+  only read at start and the new update notice tells you to restart. It refuses
+  to kill anything that is not golden-eye, and drives `launchctl` when the
+  always-on service is installed so `stop` actually stops.
+
 ### Fixed
 
 - A session waiting on background commands or live delegations no longer claims

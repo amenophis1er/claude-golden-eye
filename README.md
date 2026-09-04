@@ -401,6 +401,23 @@ zero-dependency server — end users need no build step.
   scripts and the server pick the new code up immediately; hooks.json
   registration and each session's MCP process still need a session restart.
 
+## Controlling the server
+
+Sessions start it automatically, so this is for the cases where that is not
+enough — picking up changed `config.json` opt-ins (read once at start),
+replacing a process still serving pre-update code, or just stopping it:
+
+```
+/golden-eye:server status|start|stop|restart
+```
+
+or directly: `sh <plugin root>/deploy/server.sh restart`. It only ever kills a
+process whose `/healthz` identifies as golden-eye, and drives `launchctl` when
+the always-on service is installed (otherwise KeepAlive would resurrect it and
+make `stop` look broken). Stopping is not permanent — the next session
+bootstraps it again. Session history is untouched either way; it lives in
+`~/.golden-eye/events.jsonl` and replays on the next start.
+
 ## Always-on server (launchd)
 
 Sessions bootstrap the server on demand (`SessionStart` → `boot.js`), but for
