@@ -31,6 +31,13 @@ version has no section — so this file cannot silently fall behind.
 
 ### Fixed
 
+- **Background commands no longer strand as "running" forever.** A shell was
+  only ever retired by its completion notice, and hooks fail open — so a notice
+  fired while the server was restarting was lost and the count could only go up.
+  Shell state now comes from the output file Claude Code writes per command:
+  its `[exited with code N]` marker retires the shell whether or not the notice
+  arrived, and its tail is **live output while the command runs** (previously
+  the panel claimed output was unavailable until the session read it).
 - A session waiting on background commands or live delegations no longer claims
   **your turn**. A finished background command wakes the session by itself, so
   the ball is not with you; the header and sidebar now say what is being waited

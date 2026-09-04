@@ -567,6 +567,10 @@ class Store {
       }
 
       case 'SessionEnd': {
+        // Background shells are children of the claude process: when the
+        // session ends they are gone, whether or not their completion notice
+        // ever arrived.
+        s.shells = {};
         s.state = 'ended';
         // No subagent survives its session: teardown at exit emits no
         // SubagentStop, so close out anything still marked live.

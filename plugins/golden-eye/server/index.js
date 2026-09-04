@@ -15,6 +15,7 @@ const { tailTranscript, sessionStats, agentMeta, sessionReplay } = require('./tr
 const { listProjects, resolveProjectDir, listSessions, resolveTranscript, artifactsForProject } = require('./history');
 const { readProjectFile } = require('./projectfile');
 const { updateStatus } = require('./update');
+const { shellStatus } = require('./shells');
 const { tasksForSession } = require('./tasks');
 const config = require('./config');
 
@@ -375,6 +376,22 @@ const server = http.createServer(async (req, res) => {
         sess.permissionRequests = perms
           ? [...perms.values()].map((p) => ({ ...p.request, at: new Date(p.at).toISOString() }))
           : [];
+        // Background shells: the completion notice can be lost (hooks fail
+        // open, so a restart during one drops it), which used to leave a shell
+        // "running" forever. The output file Claude Code writes per command is
+        // the durable truth — its exit marker retires the shell, and its tail
+        // is live output while the command runs.
+        if (sess.shells && sess.shells.length) {
+          sess.shells = sess.shells
+            .map((sh) => {
+              const st = shellStatus(sh.id, sess.cwd);
+              if (!st) return sh;               // file not found: keep what we knew
+              if (st.done) return null;         // finished, notice or not
+              return { ...sh, lastOutput: st.output || sh.lastOutput || '', lastReadAt: st.updatedAt };
+            })
+            .filter(Boolean);
+        }
+
         const tasks = tasksForSession(sess.id, sess.transcriptPath);
         if (tasks) sess.todos = tasks;
         sess.env = sessionStats(sess.transcriptPath); // branch/model/tokens/context

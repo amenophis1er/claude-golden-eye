@@ -232,9 +232,7 @@ export default function SessionView({ session: s, events, tab, sub, now }: {
                 {sh.lastOutput ? (
                   <pre className="mt-1 ml-4 max-h-32 overflow-auto rounded bg-zinc-100 p-1.5 font-mono text-[10px] whitespace-pre-wrap text-zinc-500 dark:bg-zinc-900">{sh.lastOutput}</pre>
                 ) : (
-                  <p className="mt-1 ml-4 text-[10px] text-zinc-400">
-                    Output stays inside Claude Code until the session reads it — nothing to show yet.
-                  </p>
+                  <p className="mt-1 ml-4 text-[10px] text-zinc-400">no output yet</p>
                 )}
               </div>
             ))}
