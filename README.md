@@ -511,13 +511,20 @@ publishing](https://docs.npmjs.com/trusted-publishers) (OIDC — no tokens, no
 OTP). To cut a release:
 
 ```bash
-# 1. move CHANGELOG.md's "## [Unreleased]" heading to "## [x.y.z] — <date>"
-#    and start a fresh Unreleased section above it
-# 2. bump "version" in package.json, both plugin manifests, the marketplace
-#    entries and the MCP serverInfo, then commit
-git tag v0.1.5
-git push origin main --tags
+# 1. move CHANGELOG.md's "## [Unreleased]" heading to "## [x.y.z] — <date>",
+#    starting a fresh Unreleased section above it
+./scripts/bump-version.sh 0.1.5    # 2. rewrites all six version sites, verifies
+(cd plugins/golden-eye/web && npm run build)   # 3. dist carries the version
+npm test
+git commit -am "release: v0.1.5"
+git tag v0.1.5 && git push origin main --tags
 ```
+
+`bump-version.sh` refuses to run when CHANGELOG.md has no section for the new
+version, and fails if any of the six sites still carries the old one — the
+plugin manifests especially, since Claude Code compares those versions to
+decide whether to refresh an install cache, so one left behind means users
+keep running old code while every command reports success.
 
 Entries go under **Unreleased** as work lands, so the notes are written while
 the reasoning is fresh rather than reconstructed at tag time. The workflow
