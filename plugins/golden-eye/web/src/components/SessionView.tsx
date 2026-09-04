@@ -3,6 +3,7 @@ import { Activity, Bot, Crown, ExternalLink, GitBranch, GitFork, Radio, ScrollTe
 import type { HookEvent, SessionInfo } from '../lib/types';
 import { navigate, type Tab } from '../lib/router';
 import { baseName, fmtTokens, relTime, shortId } from '../lib/format';
+import { isLiveAgent } from '../lib/agents';
 import LiveFeed from './LiveFeed';
 import AgentsPanel from './AgentsPanel';
 import Timeline from './Timeline';
@@ -35,11 +36,22 @@ export default function SessionView({ session: s, events, tab, sub, now }: {
   const delegates = s.agents.filter((a) => !a.mainAgent);
   const delegatesRunning = delegates.some((a) => a.status === 'running' || a.status === 'starting');
   const fresh = now - Date.parse(s.lastActivity) < 10 * 60 * 1000;
-  const working = (s.state === 'working' || s.state === 'active') && fresh;
-  // After a Stop the session is done working and the ball is in the user's
+  // Between turns the session may still be waiting on machinery that will
+  // wake it: live delegations, or background commands (whose completion the
+  // harness injects as a task-notification, starting a new turn). Neither is
+  // the user's move, so neither may be labelled "your turn".
+  const liveDelegates = delegates.filter((a) => isLiveAgent(a, now)).length;
+  const shells = s.shells?.length ?? 0;
+  const awaiting = liveDelegates
+    ? `${liveDelegates} agent${liveDelegates > 1 ? 's' : ''}`
+    : shells
+      ? `${shells} shell${shells > 1 ? 's' : ''}`
+      : null;
+  const working = ((s.state === 'working' || s.state === 'active') && fresh) || (s.state === 'idle' && !!awaiting);
+  // After a Stop with nothing in flight the ball really is in the user's
   // court — say so instead of the ambiguous "idle".
   const stateLabel = working
-    ? s.state
+    ? (s.state === 'idle' ? `waiting on ${awaiting}` : s.state)
     : s.state === 'working' || s.state === 'active'
       ? 'stalled'
       : s.state === 'idle'

@@ -67,13 +67,23 @@ function statusOf(s: SessionInfo, group: 'active' | 'idle' | 'stale', now: numbe
       tone: 'text-zinc-500',
     };
   }
+  // A finished background command wakes the session by itself (the harness
+  // injects a task-notification, which starts a new turn), so a session with
+  // shells in flight is waiting on machinery, not on you — same reasoning as
+  // running delegations above.
+  const shells = s.shells?.length ?? 0;
+  if (group === 'idle' && shells) {
+    return {
+      kind: 'working' as StatusKind,
+      text: `waiting on ${shells} shell${shells > 1 ? 's' : ''}`,
+      time: elapsed(s.lastActivity, now),
+      tone: 'text-zinc-500',
+    };
+  }
   if (group === 'idle') {
-    // A background shell keeps running while the turn is genuinely yours —
-    // mention it, but do not pretend the session is still working.
-    const shells = s.shells?.length ?? 0;
     return {
       kind: 'waiting' as StatusKind,
-      text: shells ? `your turn · ${shells} shell${shells > 1 ? 's' : ''}` : 'your turn',
+      text: 'your turn',
       time: elapsed(s.lastActivity, now),
       tone: 'text-sky-600 dark:text-sky-400',
     };
