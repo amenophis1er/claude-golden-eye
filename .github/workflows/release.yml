@@ -21,6 +21,10 @@ jobs:
       # Publishes via npm trusted publishing — configure this repo + workflow
       # as a Trusted Publisher in the package settings on npmjs.com (no token).
       - run: npm publish
-      - run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
+      # Release notes come from CHANGELOG.md, not from the commit list: this
+      # step fails when the tagged version has no section, so a release can
+      # never ship without notes someone actually wrote.
+      - run: scripts/changelog-section.sh "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
+      - run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md"
         env:
           GH_TOKEN: ${{ github.token }}

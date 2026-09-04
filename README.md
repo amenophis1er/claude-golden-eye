@@ -511,12 +511,22 @@ publishing](https://docs.npmjs.com/trusted-publishers) (OIDC — no tokens, no
 OTP). To cut a release:
 
 ```bash
-# bump "version" in package.json, commit, then:
-git tag v0.1.1
+# 1. move CHANGELOG.md's "## [Unreleased]" heading to "## [x.y.z] — <date>"
+#    and start a fresh Unreleased section above it
+# 2. bump "version" in package.json, both plugin manifests, the marketplace
+#    entries and the MCP serverInfo, then commit
+git tag v0.1.5
 git push origin main --tags
 ```
 
+Entries go under **Unreleased** as work lands, so the notes are written while
+the reasoning is fresh rather than reconstructed at tag time. The workflow
+feeds that section to the GitHub release via `scripts/changelog-section.sh`
+and **fails if the tagged version has no section** — a release cannot ship
+without notes. Write for someone using the plugin: what is new, what behaves
+differently, what was broken. The commit log carries the reasoning.
+
 `.github/workflows/release.yml` runs the tests, publishes to npm, and creates
-a GitHub release with generated notes. The trusted publisher is configured in
+a GitHub release from the matching [CHANGELOG.md](CHANGELOG.md) section. The trusted publisher is configured in
 the package's npmjs settings (repo `amenophis1er/claude-golden-eye`, workflow
 `release.yml`).
