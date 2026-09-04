@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Activity, Bot, Crown, ExternalLink, GitBranch, GitFork, Radio, ScrollText, Target, TerminalSquare, ChevronDown } from 'lucide-react';
 import type { HookEvent, SessionInfo } from '../lib/types';
 import { navigate, type Tab } from '../lib/router';
@@ -32,6 +32,24 @@ export default function SessionView({ session: s, events, tab, sub, now }: {
   session: SessionInfo; events: HookEvent[]; tab: Tab; sub: string | null; now: number;
 }) {
   const [showShells, setShowShells] = useState(false);
+  // Resolved only while the panel is open: it costs an lsof server-side, so
+  // it must never ride along with the state poll.
+  const [shellProcs, setShellProcs] = useState<Record<string, { pgid: number | null; stopCommand: string | null }>>({});
+  useEffect(() => {
+    if (!showShells || !s.shells?.length) return;
+    let dead = false;
+    const load = () => {
+      for (const sh of s.shells ?? []) {
+        fetch(`/api/shell?sessionId=${encodeURIComponent(s.id)}&id=${encodeURIComponent(sh.id)}`)
+          .then((r) => r.json())
+          .then((j) => { if (!dead) setShellProcs((prev) => ({ ...prev, [sh.id]: j })); })
+          .catch(() => {});
+      }
+    };
+    load();
+    const t = window.setInterval(load, 15000);
+    return () => { dead = true; window.clearInterval(t); };
+  }, [showShells, s.id, s.shells?.length]);
   const sessionEvents = events.filter((e) => e.payload?.session_id === s.id);
   const delegates = s.agents.filter((a) => !a.mainAgent);
   const delegatesRunning = delegates.some((a) => a.status === 'running' || a.status === 'starting');
@@ -228,6 +246,18 @@ export default function SessionView({ session: s, events, tab, sub, now }: {
                 </div>
                 {sh.command && (
                   <pre className="mt-1 ml-4 max-h-16 overflow-auto rounded bg-zinc-100 p-1.5 font-mono text-[10px] whitespace-pre-wrap dark:bg-zinc-900">{sh.command}</pre>
+                )}
+                {shellProcs[sh.id]?.stopCommand && (
+                  <div className="mt-1 ml-4 flex items-center gap-1.5 text-[10px] text-zinc-400">
+                    <span>pgid {shellProcs[sh.id].pgid}</span>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(shellProcs[sh.id].stopCommand!)}
+                      title="copy — stops the whole command; a bare kill of the wrapper can orphan its child"
+                      className="rounded border border-zinc-200 px-1.5 font-mono hover:bg-zinc-100 dark:border-zinc-800 dark:hover:bg-zinc-800"
+                    >
+                      {shellProcs[sh.id].stopCommand}
+                    </button>
+                  </div>
                 )}
                 {sh.lastOutput ? (
                   <pre className="mt-1 ml-4 max-h-32 overflow-auto rounded bg-zinc-100 p-1.5 font-mono text-[10px] whitespace-pre-wrap text-zinc-500 dark:bg-zinc-900">{sh.lastOutput}</pre>

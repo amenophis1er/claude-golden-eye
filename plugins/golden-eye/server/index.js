@@ -15,7 +15,7 @@ const { tailTranscript, sessionStats, agentMeta, sessionReplay } = require('./tr
 const { listProjects, resolveProjectDir, listSessions, resolveTranscript, artifactsForProject } = require('./history');
 const { readProjectFile } = require('./projectfile');
 const { updateStatus } = require('./update');
-const { shellStatus } = require('./shells');
+const { shellStatus, shellProcess } = require('./shells');
 const { tasksForSession } = require('./tasks');
 const config = require('./config');
 
@@ -433,6 +433,16 @@ const server = http.createServer(async (req, res) => {
       snapshot.version = config.VERSION;
       snapshot.update = updateStatus(UPDATE_CHECK_ENABLED);
       return sendJson(res, 200, snapshot);
+    }
+
+    // ---------- background command process (on demand) ----------
+    // Resolving this costs an lsof, so it is never part of /api/state; the
+    // shells panel asks only for what a user has opened.
+    if (req.method === 'GET' && url.pathname === '/api/shell') {
+      const sess = store.sessions.get(url.searchParams.get('sessionId') || '');
+      if (!sess) return sendJson(res, 404, { error: 'unknown session' });
+      const info = shellProcess(url.searchParams.get('id'), sess.cwd);
+      return sendJson(res, 200, info || { pids: [], pgid: null, stopCommand: null });
     }
 
     // ---------- read-only project file peek (opt-in) ----------

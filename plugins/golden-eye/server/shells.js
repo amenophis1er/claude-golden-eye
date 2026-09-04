@@ -115,4 +115,46 @@ function shellStatus(taskId, cwd) {
   }
 }
 
-module.exports = { shellStatus, findOutputFile, EXIT_RE };
+/**
+ * The live process behind a background command, resolved from who holds its
+ * output file open — an exact mapping, unlike matching command text.
+ *
+ * Returns the process GROUP, not a bare pid, because that is what actually
+ * stops the work: the wrapper and the command it runs share a pgid, and
+ * killing the wrapper alone can orphan the child rather than stop it.
+ *
+ * Deliberately not called from /api/state: lsof spawns a process and can block
+ * on a busy machine, so this is on-demand only (the shells panel asks when a
+ * user opens it).
+ */
+function shellProcess(taskId, cwd) {
+  const file = findOutputFile(taskId, cwd);
+  if (!file) return null;
+  let out;
+  try {
+    out = require('child_process').execFileSync('lsof', ['-t', file], {
+      encoding: 'utf8',
+      timeout: 3000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch (_) {
+    return null; // lsof missing, or nothing holds the file: it has finished
+  }
+  const pids = out.split('\n').map((n) => parseInt(n, 10)).filter(Boolean);
+  if (!pids.length) return null;
+  let pgid = null;
+  try {
+    const ps = require('child_process').execFileSync('ps', ['-o', 'pgid=', '-p', pids.join(',')], {
+      encoding: 'utf8',
+      timeout: 3000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    const groups = ps.split('\n').map((n) => parseInt(n, 10)).filter(Boolean);
+    // One group is expected; if the command spawned into several, the lowest
+    // is the wrapper's and the one worth naming.
+    pgid = groups.length ? Math.min(...groups) : null;
+  } catch (_) {}
+  return { pids, pgid, stopCommand: pgid ? `kill -- -${pgid}` : `kill ${pids[0]}` };
+}
+
+module.exports = { shellStatus, shellProcess, findOutputFile, EXIT_RE };

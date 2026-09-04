@@ -23,6 +23,11 @@ version has no section — so this file cannot silently fall behind.
   `GOLDEN_EYE_UPDATE_CHECK=1`): once a day, cached, silent on failure, never
   auto-updating, and it names the command that fits how this copy was installed.
 
+- **Stop command for a background shell.** The expanded shells panel shows the
+  command's process group and a copyable `kill -- -<pgid>` — the process group,
+  not a bare pid, because the wrapper and the command it runs share a group and
+  killing the wrapper alone can orphan the work rather than stop it. Resolved on
+  demand (it costs an `lsof`), so it never rides along with the state poll.
 - **`/golden-eye:server status|start|stop|restart`** — the dashboard server had
   no documented way to be restarted, which mattered because changed opt-ins are
   only read at start and the new update notice tells you to restart. It refuses
